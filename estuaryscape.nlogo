@@ -1,3 +1,7 @@
+;;ESTUARYSCAPE MODEL
+
+;; Parameters not in the interface
+
 breed [fishes flatfish]
 
 globals[
@@ -17,11 +21,12 @@ patches-own [
   worms
   bivalves
   plankton
-
+  habitat ; canal or mudflat
 
   ]
 
-;; this procedures sets up the model
+;; Model setup and schedule
+
 to setup
   clear-all
   ask patches [
@@ -29,7 +34,7 @@ to setup
     set worms random-float 10.0
     set bivalves random-float 10.0
     set plankton random-float 10.0
-    recolor-worms ;; change the world green
+    recolor-patches ;; change the world green
   ]
   create-fishes number-of-fishes [
     setxy random-xcor random-ycor
@@ -40,48 +45,31 @@ to setup
   reset-ticks
 end
 
-;; make the model run
 to go
   if not any? fishes [
     stop
   ]
   ask fishes [
-    wiggle        ;; first turn a little bit
     move          ;; then step forward
     check-if-dead ;; check to see if agent should die
     eat           ;; fishes eat worms
     reproduce     ;; the fishes reproduce
   ]
-  regrow-worms    ;; the worms grows back
+  regrow-prey    ;; the worms grows back
   tick
   my-update-plots ;; plot the population counts
 end
 
-;; check to see if this fishes has enough energy to reproduce
-to reproduce
-  if energy > 200 [
-    set energy energy - 100  ;; reproduction transfers energy
-    hatch 1 [ set energy 100 ] ;; to the new agent
-  ]
+;; FISH PROCEDURES
+
+;; fishes decide whether to stay or move based on the conditions of the current patch
+to move
+
+
 end
 
-;; recolor the worms to indicate how much has been eaten
-to recolor-worms
-  set pcolor scale-color green worms 0 20
-end
 
-;; regrow the worms
-to regrow-worms
-  ask patches [
-    set worms worms + worms-regrowth-rate
-    if worms > 10.0 [
-      set worms 10.0
-    ]
-    recolor-worms
-  ]
-end
-
-;; fishes procedure, fishes eat worms
+;; fishes eat worms
 to eat
   ;; check to make sure there is worms here
   if ( worms >= energy-gain-from-worms ) [
@@ -89,33 +77,51 @@ to eat
     set energy energy + energy-gain-from-worms
     ;; decrement the worms
     set worms worms - energy-gain-from-worms
-    recolor-worms
+    recolor-patches
   ]
 end
 
-;; asks those fishes with no energy to die
+;; asks fishes with no energy to die
 to check-if-dead
   if energy < 0  [
     die
   ]
 end
 
+;; check to see if fishes have enough energy to reproduce
+to reproduce
+  if energy > 200 [
+    set energy energy - 100  ;; reproduction transfers energy
+    hatch 1 [ set energy 100 ] ;; to the new agent
+  ]
+end
+
+
+
+;; PREY PROCEDURES
+
+;; regrow prey
+to regrow-prey
+  ask patches [
+    set worms worms + worms-regrowth-rate
+    set bivalves bivalves + bivalves-regrowth-rate
+    set plankton plankton + plankton-regrowth-rate
+
+    if worms > 10.0 [set worms 10.0]
+    recolor-patches
+  ]
+end
+
+;; recolor the worms to indicate how much has been eaten
+to recolor-patches
+  set pcolor scale-color green (worms + plankton + bivalves) 0 20
+end
+
+; PLOTTING AND OUTPUTS
+
 ;; update the plots in the interface tab
 to my-update-plots
   plot count fishes
-end
-
-;; fishes procedure, the fishes changes its heading
-to wiggle
-  ;; turn right then left, so the average is straight ahead
-  rt random 90
-  lt random 90
-end
-
-;; fishes procedure, the fishes moves which costs it energy
-to move
-  forward 1
-  set energy energy - large-movement-cost ;; reduce the energy by the cost of movement
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -233,7 +239,7 @@ large-movement-cost
 large-movement-cost
 0
 100
-50
+47
 1
 1
 NIL
@@ -654,6 +660,96 @@ weight-per-plankton
 0
 100
 50
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+150
+665
+322
+698
+max-worms-mudflat
+max-worms-mudflat
+0
+100
+50
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+175
+710
+347
+743
+max-bivalves-mudflat
+max-bivalves-mudflat
+0
+100
+50
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+195
+755
+367
+788
+max-plankton-mudflat
+max-plankton-mudflat
+0
+100
+50
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+430
+665
+602
+698
+max-worms-canal
+max-worms-canal
+0
+100
+51
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+450
+705
+622
+738
+max-worms-canal
+max-worms-canal
+0
+100
+51
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+465
+745
+637
+778
+max-worms-canal
+max-worms-canal
+0
+100
+51
 1
 1
 NIL
