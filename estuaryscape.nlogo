@@ -1,23 +1,27 @@
 ;;ESTUARYSCAPE MODEL
 
+extensions [gis]
+
 ;; Parameters not in the interface
 
-breed [fishes flatfish]
+breed [fishes fish]
 
 globals[
-
+  the-map
 ]
 
 fishes-own [
   energy
+  eating ;prey type the fish is currently eating
   species
   sex
-  reserve ;energy reserve
+  reserve ; energy reserve
   age
   stage ;juv or adult
   ]
 
 patches-own [
+  patch-id ; unique number to identify each patch
   worms
   bivalves
   plankton
@@ -27,19 +31,24 @@ patches-own [
 
 ;; Model setup and schedule
 
+to startup
+  load-example-map
+  set map-file "map.asc"
+end
+
 to setup
   clear-all
+  load-map
   ask patches [
-    ;; give worms to the patches, color it shades of green
     set worms random-float 10.0
     set bivalves random-float 10.0
     set plankton random-float 10.0
-    recolor-patches ;; change the world green
+    recolor-patches
   ]
   create-fishes number-of-fishes [
     setxy random-xcor random-ycor
-    set color white
-    set shape "fishes"
+    set color one-of [red green]
+    set shape "fish"
     set energy 100
   ]
   reset-ticks
@@ -50,6 +59,7 @@ to go
     stop
   ]
   ask fishes [
+    pay-maintenance
     move          ;; then step forward
     check-if-dead ;; check to see if agent should die
     eat           ;; fishes eat worms
@@ -60,16 +70,23 @@ to go
   my-update-plots ;; plot the population counts
 end
 
+
 ;; FISH PROCEDURES
 
 ;; fishes decide whether to stay or move based on the conditions of the current patch
+
+to pay-maintenance
+
+end
+
+
 to move
 
 
 end
 
 
-;; fishes eat worms
+;; fishes eat prey
 to eat
   ;; check to make sure there is worms here
   if ( worms >= energy-gain-from-worms ) [
@@ -98,7 +115,12 @@ end
 
 
 
-;; PREY PROCEDURES
+;; PATCH PROCEDURES
+
+;; create the world
+to setup-environment
+
+end
 
 ;; regrow prey
 to regrow-prey
@@ -114,7 +136,7 @@ end
 
 ;; recolor the worms to indicate how much has been eaten
 to recolor-patches
-  set pcolor scale-color green (worms + plankton + bivalves) 0 20
+  set pcolor scale-color pcolor (worms + plankton + bivalves) 0 20
 end
 
 ; PLOTTING AND OUTPUTS
@@ -123,28 +145,147 @@ end
 to my-update-plots
   plot count fishes
 end
+
+;; MAP EDITOR
+
+to draw-canals
+  if mouse-down?     ;; reports true or false to indicate whether mouse button is down
+    [
+      ask patch mouse-xcor mouse-ycor
+        [ set pcolor 96
+          display ]
+    ]
+end
+
+
+to draw-mudflats
+  if mouse-down?     ;; reports true or false to indicate whether mouse button is down
+    [
+      ask patch mouse-xcor mouse-ycor
+        [ set pcolor 37
+          display ]
+    ]
+end
+
+to erase-map
+   if mouse-down?     ;; reports true or false to indicate whether mouse button is down
+    [
+      ask patch mouse-xcor mouse-ycor
+        [ set pcolor black
+          display ]
+    ]
+end
+
+to fill-land
+  ask patches with [pcolor = black] [
+   set pcolor green
+  ]
+end
+
+
+;; MAPS ;;
+
+to load-map
+  set the-map gis:load-dataset map-file
+  gis:apply-raster the-map pcolor
+  ask patches [
+    if pcolor = 96 [set habitat "canal"]
+    if pcolor = 37 [set habitat "mudflat"]
+    if pcolor = green [set habitat "land"]
+  ]
+end
+
+to load-example-map
+
+set the-map
+[55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55
+55 55 55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 37 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55
+55 55 55 55 55 55 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55
+55 55 55 55 55 55 37 37 37 96 96 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 55 55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55
+55 55 55 55 55 55 37 37 37 37 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55
+55 55 55 55 55 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 55 55 55 55 55 55
+55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 55 55 55 55 55 55
+55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
+55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
+55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
+55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
+55 55 55 55 37 37 37 37 37 37 96 96 96 96 37 37 37 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
+55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
+55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 55 55 55 55
+55 55 37 37 37 96 96 96 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 55 55 55 55
+55 55 37 96 96 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 55 55 55
+96 96 96 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 96 96 96 96 96 37 37 37 37 37 55 55 55
+96 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 37 37 37 37 37 55 55
+96 96 37 37 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 96 37 37 37 37 55 55
+55 37 37 37 37 37 37 96 37 37 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 96 96 37 37 37 55 55
+55 55 37 37 37 37 37 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 37 96 96 37 37 37 37
+55 55 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 96 96 96 96 96 37 37 96 37 37 96 37
+55 55 37 37 37 37 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 96 96 96 96 37 37 96 96 37 96 37
+55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 96 96 96 37
+55 55 55 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
+55 55 55 55 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
+55 55 55 55 55 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 37 37 37 37 37
+55 55 55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37 37
+55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37
+55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37 37
+55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37
+55 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 96 96 96 96 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 96 96 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 96 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 37 37 37 37 37 37 37 37 55 37 37 37 37 37 37 96 96 37 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 37 37 55 55 55 55 55 37 37 37 37 37 96 96 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 37 37 37 96 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 96 96 96 37 37 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 96 37 37 37 55 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 55 55 55 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 55 55 55 55 55 55 55]
+
+ask patches [set pcolor item (pxcor - ((pycor - 49) * 50)) the-map
+  if pcolor = 96 [set habitat "canal"]
+  if pcolor = 37 [set habitat "mudflat"]
+  if pcolor = 55 [set habitat "land"]
+]
+
+gis:set-world-envelope (list min-pxcor max-pxcor min-pycor max-pycor)
+
+set the-map gis:patch-dataset pcolor
+
+gis:store-dataset the-map "map"
+
+user-message "Welcome! The default map has been loaded and saved as a map.asc raster file in your model folder."
+
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-295
-15
-734
-475
-16
-16
-13.0
-1
+255
 10
+765
+541
+-1
+-1
+10.0
+1
+5
 1
 1
 1
 0
+0
+0
 1
-1
-1
--16
-16
--16
-16
+0
+49
+0
+49
 0
 0
 1
@@ -194,7 +335,7 @@ number-of-fishes
 number-of-fishes
 10
 500
-50
+190
 5
 1
 NIL
@@ -231,10 +372,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-360
-505
-532
-538
+830
+640
+1002
+673
 large-movement-cost
 large-movement-cost
 0
@@ -471,10 +612,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-360
-545
-532
-578
+830
+680
+1002
+713
 maintenance-cost
 maintenance-cost
 0
@@ -486,10 +627,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-355
-590
-527
-623
+825
+725
+997
+758
 energy-reserve-size
 energy-reserve-size
 0
@@ -501,10 +642,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-545
-505
-717
-538
+1015
+640
+1187
+673
 small-movement-cost
 small-movement-cost
 0
@@ -754,6 +895,153 @@ max-worms-canal
 1
 NIL
 HORIZONTAL
+
+BUTTON
+1500
+280
+1597
+313
+NIL
+draw-canals
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1605
+280
+1712
+313
+NIL
+draw-mudflats
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1570
+235
+1637
+268
+NIL
+fill-land
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1500
+320
+1587
+353
+NIL
+erase-map
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1515
+180
+1687
+213
+clear labels
+ask patches [set plabel \"\"]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1570
+375
+1652
+408
+Save map
+gis:set-world-envelope (list min-pxcor max-pxcor min-pycor max-pycor)\nset the-map gis:patch-dataset pcolor\ngis:store-dataset the-map user-input \"The map will be stored as an .asc file. If the file exists, it will be overwritten. Pick a file name (exclude extension).\"
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1665
+375
+1747
+408
+Load map
+load-map
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1610
+325
+1702
+358
+Clean slate
+ask patches [set pcolor black]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+INPUTBOX
+1485
+455
+1625
+515
+map-file
+map.asc
+1
+0
+String
 
 @#$#@#$#@
 ## WHAT IS IT?
