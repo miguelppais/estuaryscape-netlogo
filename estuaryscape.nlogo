@@ -12,12 +12,18 @@ globals[
 
 fishes-own [
   energy
-  eating ;prey type the fish is currently eating
+  eating                  ; prey type the fish is currently eating ????
+  move-decision           ; decision whether to move or stay, by analysing current patch (for synchronization)
   species
   sex
-  reserve ; energy reserve
+  reserve                 ; energy reserve
   age
   stage ;juv or adult
+  age-at-maturity
+  max-age
+  feeding-rate
+  assimilation-rate
+  reproduction-threshold
   ]
 
 patches-own [
@@ -26,7 +32,8 @@ patches-own [
   bivalves
   plankton
   habitat ; canal or mudflat
-
+  red.eggs ; red fish eggs
+  green.eggs ; green fish eggs
   ]
 
 ;; Model setup and schedule
@@ -39,18 +46,8 @@ end
 to setup
   clear-all
   load-map
-  ask patches [
-    set worms random-float 10.0
-    set bivalves random-float 10.0
-    set plankton random-float 10.0
-    recolor-patches
-  ]
-  create-fishes number-of-fishes [
-    setxy random-xcor random-ycor
-    set color one-of [red green]
-    set shape "fish"
-    set energy 100
-  ]
+  setup-environment
+  setup-fishes
   reset-ticks
 end
 
@@ -59,35 +56,120 @@ to go
     stop
   ]
   ask fishes [
-    pay-maintenance
-    move          ;; then step forward
-    check-if-dead ;; check to see if agent should die
-    eat           ;; fishes eat worms
-    reproduce     ;; the fishes reproduce
+    grow                              ; die if too old, increase age otherwise (also controls life stage change)
+    pay-maintenance                                                    ; pay maintenance-costs or die!
+    set move-decision "undecided"                                      ; when the turn starts, every fish is undecided
+    scan-surroundings
+    move                                                               ; move or stay based on the scan decision
+    check-if-dead                                                      ; check to see if agent should die
+    eat                                                                ; fishes eat prey
   ]
-  regrow-prey    ;; the worms grows back
+  fish-reproduction  ; fish reproduce
+  regrow-prey        ; prey grows back
+  diffuse worms 0.01      ; prey move to adjacent patches
+  diffuse bivalves 0.01
+  diffuse plankton 0.3
   tick
-  my-update-plots ;; plot the population counts
 end
 
 
-;; FISH PROCEDURES
+;; FISH-RELATED PROCEDURES
+
+
+
+to setup-fishes
+  create-fishes number-of-fishes [
+    move-to-and-jitter one-of patches with [pcolor != 55] ; place fishes on a random patch that is not land (green) and jitter
+    set color one-of [red green]
+    set sex one-of ["male" "female"]
+    set shape "fish"
+    set energy energy-reserve-size - random-float (energy-reserve-size * 0.1) ; individual variability in initial energy from top 10% of max reserve size
+  ]
+
+  ask fishes with [color = red] [                                  ; setup red fish attributes
+    set species "red"
+    set age-at-maturity age-at-maturity-red * 365                 ; convert age to days (ticks)
+    set max-age max-age-red * 365
+    set feeding-rate feeding-rate-red
+    set assimilation-rate assimilation-rate-red
+    set reproduction-threshold reproduction-threshold-red
+  ]
+
+  ask fishes with [color = green] [                                 ; setup green fish attributes
+    set species "green"
+    set age-at-maturity age-at-maturity-green * 365                ; convert age to days (ticks)
+    set max-age max-age-green * 365
+    set feeding-rate feeding-rate-green
+    set assimilation-rate assimilation-rate-green
+    set reproduction-threshold reproduction-threshold-green
+  ]
+
+  ask fishes [
+    set age random-normal (max-age / 2) ((max-age / 2) * 0.3)     ; distribute ages with the mean as half the life expectancy and a CV of 30%
+    if age < 0 [set age 0]
+    ifelse age >= age-at-maturity [set stage "adult"] [set stage "juvenile"]
+    set size 0.3 + ((age / max-age) * 0.3)                        ; scale the size according to age
+  ]
+
+end
+
+to move-to-and-jitter [p] ; moves to a patch and jitters fish coordinates within patch for easier visualization
+  let x [pxcor] of p
+  let y [pycor] of p
+  setxy (x + random-float-between -0.49 0.49) (y + random-float-between -0.49 0.49)
+end
+
+
+
+to pay-maintenance
+  set energy energy - maintenance-cost
+  if energy <= 0 [die] ; fish die if they can't pay maintenance
+
+end
+
+
+
+to grow
+  if age >= max-age [die]
+  set age age + 1
+  if age >= age-at-maturity [set stage "adult"]
+  set size 0.3 + ((age / max-age) * 0.3)                        ; scale the size according to age
+end
 
 ;; fishes decide whether to stay or move based on the conditions of the current patch
 
-to pay-maintenance
+to scan-surroundings
 
-end
+  ifelse (stage = "adult" and energy > reproduction-threshold) [            ; thought process of horny adults
+    ifelse any? fishes-here with [sex != [sex] of myself and species = [species] of myself] [
+      set move-decision "stay"
+    ] [
+    set move-decision "move"
+    ] ; end ifelse
 
+  ] [
+
+  if eating = "worms"                                             ; thought process of hungry adults
+
+  ]   ; end ifelse
+
+ end
 
 to move
 
+  ifelse move-decision = "stay" [
+   set energy energy - small-movement-cost
+  ] [
+   set energy energy - large-movement-cost
+   move-to-and-jitter one-of neighbors with [habitat != "land"]
+  ]
 
 end
 
-
 ;; fishes eat prey
-to eat
+
+to eat                                                     ; consider having a fitness measure controlling who gets the best prey
+  let prey-amount 0
   ;; check to make sure there is worms here
   if ( worms >= energy-gain-from-worms ) [
     ;; increment the fishes's energy
@@ -105,46 +187,67 @@ to check-if-dead
   ]
 end
 
-;; check to see if fishes have enough energy to reproduce
-to reproduce
-  if energy > 200 [
-    set energy energy - 100  ;; reproduction transfers energy
-    hatch 1 [ set energy 100 ] ;; to the new agent
-  ]
+; Apt fish reproduce
+
+to fish-reproduction     ; observer procedure
+ask fishes with [stage = "adult" and energy > reproduction-threshold] [
+  let partner one-of other fishes with
+]
+
+
 end
 
 
 
-;; PATCH PROCEDURES
+;; PATCH-RELATED PROCEDURES
+
+
 
 ;; create the world
 to setup-environment
-
+  ask patches [
+    set worms random-float 10.0
+    set bivalves random-float 10.0
+    set plankton random-float 10.0
+  ]
 end
 
 ;; regrow prey
 to regrow-prey
   ask patches [
-    set worms worms + worms-regrowth-rate
-    set bivalves bivalves + bivalves-regrowth-rate
-    set plankton plankton + plankton-regrowth-rate
-
+    set worms worms + (worms-regrowth-rate * worms)
+    set bivalves bivalves + (bivalves-regrowth-rate * bivalves)
+    set plankton plankton + (plankton-regrowth-rate * plankton)
     if worms > 10.0 [set worms 10.0]
     recolor-patches
   ]
 end
 
+; PREY REPORTERS
+
+to-report worms-value
+report energy-gain-from-worms * weight-per-worm
+end
+
+to-report bivalves-value
+report energy-gain-from-bivalves * weight-per-bivalve
+end
+
+to-report plankton-value
+report energy-gain-from-plankton * weight-per-plankton
+end
+
+
 ;; recolor the worms to indicate how much has been eaten
-to recolor-patches
-  set pcolor scale-color pcolor (worms + plankton + bivalves) 0 20
+to recolor-patches   ; alternative visualization to look at prey types
+
 end
 
 ; PLOTTING AND OUTPUTS
 
-;; update the plots in the interface tab
-to my-update-plots
-  plot count fishes
-end
+
+
+
 
 ;; MAP EDITOR
 
@@ -198,7 +301,8 @@ end
 to load-example-map
 
 set the-map
-[55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55
+[
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55
 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55
 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55
 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55
@@ -218,36 +322,37 @@ set the-map
 55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 55 55 55 55
 55 55 37 37 37 96 96 96 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 55 55 55 55
 55 55 37 96 96 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 55 55 55
-96 96 96 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 96 96 96 96 96 37 37 37 37 37 55 55 55
-96 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 37 37 37 37 37 55 55
-96 96 37 37 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 96 37 37 37 37 55 55
+55 55 37 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 96 96 96 96 96 37 37 37 37 37 55 55 55
+55 37 37 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 37 37 37 37 37 55 55
+55 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 96 37 37 37 37 55 55
 55 37 37 37 37 37 37 96 37 37 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 96 96 37 37 37 55 55
-55 55 37 37 37 37 37 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 37 96 96 37 37 37 37
-55 55 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 96 96 96 96 96 37 37 96 37 37 96 37
-55 55 37 37 37 37 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 96 96 96 96 37 37 96 96 37 96 37
-55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 96 96 96 37
-55 55 55 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
-55 55 55 55 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
-55 55 55 55 55 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 37 37 37 37 37
-55 55 55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37 37
-55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37
-55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37 37
-55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37
-55 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96
+55 37 37 37 37 37 37 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 37 96 96 37 37 37 37
+55 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 96 96 96 96 96 37 37 96 37 37 96 37
+37 37 37 37 37 37 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 96 96 96 96 37 37 96 96 37 96 37
+37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 96 96 96 37
+37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
+37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
+37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 37 37 37 37 37
+37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37 37
+37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96
 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 96 96 96 96 96
 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 96 96 96
 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 96 96
 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 96
 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 37 37 37 37 37 37 37 37 55 37 37 37 37 37 37 96 96 37 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 37 37 55 55 55 55 55 37 37 37 37 37 96 96 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 37 37 37 96 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 96 96 96 37 37 55 55 55
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 96 37 37 37 55 55 55 55
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 55 55 55 55 55 55
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 55 55 55 55 55 55 55]
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 37 37 37 96 96 96 37 37 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 37 37 37 96 37 37 37 55 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 55 55 55 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 55 55 55 55 55 55 55
+]
 
 ask patches [set pcolor item (pxcor - ((pycor - 49) * 50)) the-map
   if pcolor = 96 [set habitat "canal"]
@@ -263,6 +368,17 @@ gis:store-dataset the-map "map"
 
 user-message "Welcome! The default map has been loaded and saved as a map.asc raster file in your model folder."
 
+end
+
+
+; USEFUL REPORTERS
+
+to-report random-float-between [a b]
+  report a + random-float (b - a)
+end
+
+to-report random-between [a b]
+  report a + random (b - a)
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -286,17 +402,17 @@ GRAPHICS-WINDOW
 49
 0
 49
-0
-0
+1
+1
 1
 ticks
 30.0
 
 BUTTON
-31
-34
-94
-67
+15
+15
+78
+60
 NIL
 setup
 NIL
@@ -310,13 +426,13 @@ NIL
 1
 
 BUTTON
-107
-33
-170
-66
-NIL
+80
+15
+167
+60
+go / pause
 go
-NIL
+T
 1
 T
 OBSERVER
@@ -328,580 +444,520 @@ NIL
 
 SLIDER
 15
-85
-187
-118
+70
+240
+103
 number-of-fishes
 number-of-fishes
 10
 500
-190
+500
 5
 1
 NIL
 HORIZONTAL
 
 SLIDER
-780
-45
-952
-78
+245
+705
+535
+738
 worms-regrowth-rate
 worms-regrowth-rate
-1
+0
 100
-53
+20
+1
+1
+/ worm / day
+HORIZONTAL
+
+SLIDER
+20
+705
+245
+738
+energy-gain-from-worms
+energy-gain-from-worms
+0
+30
+17
+0.5
+1
+per g
+HORIZONTAL
+
+SLIDER
+1050
+470
+1222
+503
+large-movement-cost
+large-movement-cost
+0
+100
+30
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-780
-85
+245
+750
+535
+783
+bivalves-regrowth-rate
+bivalves-regrowth-rate
+0
+100
+20
+1
+1
+/ bivalve / day
+HORIZONTAL
+
+SLIDER
+245
+795
+535
+828
+plankton-regrowth-rate
+plankton-regrowth-rate
+0
+20000
+7000
+100
+1
+/ plankton / day
+HORIZONTAL
+
+SLIDER
+20
+750
+245
+783
+energy-gain-from-bivalves
+energy-gain-from-bivalves
+0
+30
+10
+0.5
+1
+per g
+HORIZONTAL
+
+SLIDER
+20
+795
+245
+828
+energy-gain-from-plankton
+energy-gain-from-plankton
+0
+100
+50
+1
+1
+per g
+HORIZONTAL
+
+SLIDER
+795
+60
+987
+93
+age-at-maturity-red
+age-at-maturity-red
+1
+30
+10
+1
+1
+years
+HORIZONTAL
+
+SLIDER
+1040
+60
+1242
+93
+age-at-maturity-green
+age-at-maturity-green
+1
+30
+10
+1
+1
+years
+HORIZONTAL
+
+SLIDER
+795
+110
 967
-118
-energy-gain-from-worms
-energy-gain-from-worms
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-830
-640
-1002
-673
-large-movement-cost
-large-movement-cost
-0
-100
-47
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1200
-45
-1377
-78
-bivalves-regrowth-rate
-bivalves-regrowth-rate
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-995
-45
-1172
-78
-plankton-regrowth-rate
-plankton-regrowth-rate
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1190
-90
-1382
-123
-energy-gain-from-bivalves
-energy-gain-from-bivalves
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-990
-85
-1187
-118
-energy-gain-from-plankton
-energy-gain-from-plankton
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-780
-130
-952
-163
-worms-foraging-cost
-worms-foraging-cost
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1200
-125
-1372
-158
-bivalves-foraging-cost
-bivalves-foraging-cost
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1000
-130
-1172
-163
-plankton-foraging-cost
-plankton-foraging-cost
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-785
-255
-957
-288
-age-at-maturity-red
-age-at-maturity-red
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1030
-255
-1202
-288
-age-at-maturity-green
-age-at-maturity-green
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-785
-305
-957
-338
+143
 max-age-red
 max-age-red
-0
-100
-50
+1
+30
+15
 1
 1
-NIL
+years
 HORIZONTAL
 
 SLIDER
-1030
-305
-1202
-338
-max-age-green
-max-age-green
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-785
-360
-957
-393
-feeding-rate-red
-feeding-rate-red
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1030
-360
-1202
-393
-feeding-rate-green
-feeding-rate-green
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-785
-405
-957
-438
-assimilation-rate-red
-assimilation-rate-red
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1035
-405
+1040
+110
 1212
-438
+143
+max-age-green
+max-age-green
+1
+30
+15
+1
+1
+years
+HORIZONTAL
+
+SLIDER
+795
+165
+992
+198
+feeding-rate-red
+feeding-rate-red
+0
+100
+50
+1
+1
+g per day
+HORIZONTAL
+
+SLIDER
+1040
+165
+1252
+198
+feeding-rate-green
+feeding-rate-green
+0
+100
+50
+1
+1
+g per day
+HORIZONTAL
+
+SLIDER
+795
+210
+972
+243
+assimilation-rate-red
+assimilation-rate-red
+0
+100
+50
+5
+1
+%
+HORIZONTAL
+
+SLIDER
+1045
+210
+1237
+243
 assimilation-rate-green
 assimilation-rate-green
 0
 100
 50
+5
+1
+%
+HORIZONTAL
+
+SLIDER
+1050
+505
+1222
+538
+maintenance-cost
+maintenance-cost
+0
+100
+20
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-830
-680
-1002
-713
-maintenance-cost
-maintenance-cost
+1050
+435
+1222
+468
+small-movement-cost
+small-movement-cost
 0
 100
-50
+15
 1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+790
+255
+987
+288
+reproduction-threshold-red
+reproduction-threshold-red
+0
+1000
+800
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+1040
+255
+1252
+288
+reproduction-threshold-green
+reproduction-threshold-green
+0
+1000
+800
+10
 1
 NIL
 HORIZONTAL
 
 SLIDER
 825
-725
-997
-758
-energy-reserve-size
-energy-reserve-size
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1015
-640
-1187
-673
-small-movement-cost
-small-movement-cost
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-780
-450
-977
-483
-reproduction-threshold-red
-reproduction-threshold-red
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1030
-450
-1242
-483
-reproduction-threshold-green
-reproduction-threshold-green
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-20
-380
-192
-413
-cost-per-gamete
-cost-per-gamete
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-15
-420
-187
-453
-days-unitl-hatch
-days-unitl-hatch
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-785
-490
-957
-523
-egg-mortality-red
-egg-mortality-red
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1035
-490
-1207
-523
-egg-mortality-green
-egg-mortality-green
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-860
-545
-1032
-578
-energy-reserve-size
-energy-reserve-size
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-780
-175
-952
-208
-weight-per-worm
-weight-per-worm
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1200
-165
-1372
-198
-weight-per-bivalve
-weight-per-bivalve
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
+370
 1000
-175
-1172
-208
-weight-per-plankton
-weight-per-plankton
-0
-100
-50
+403
+cost-per-gamete
+cost-per-gamete
+0.0005
+0.005
+0.001
+0.0005
+1
+NIL
+HORIZONTAL
+
+SLIDER
+825
+405
+1000
+438
+days-unitl-hatch
+days-unitl-hatch
+1
+30
+10
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-150
-665
-322
-698
-max-worms-mudflat
-max-worms-mudflat
+795
+295
+967
+328
+egg-mortality-red
+egg-mortality-red
 0
 100
-50
+40
+5
 1
+%
+HORIZONTAL
+
+SLIDER
+1045
+295
+1222
+328
+egg-mortality-green
+egg-mortality-green
+0
+100
+40
+5
+1
+%
+HORIZONTAL
+
+SLIDER
+1050
+370
+1222
+403
+energy-reserve-size
+energy-reserve-size
+10
+1500
+1500
+10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-175
-710
-347
-743
-max-bivalves-mudflat
-max-bivalves-mudflat
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-195
-755
-367
-788
-max-plankton-mudflat
-max-plankton-mudflat
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-430
-665
-602
-698
-max-worms-canal
-max-worms-canal
-0
-100
-51
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-450
+535
 705
-622
+720
+738
+weight-per-worm
+weight-per-worm
+0.01
+0.3
+0.08
+0.01
+1
+g
+HORIZONTAL
+
+SLIDER
+535
+750
+720
+783
+weight-per-bivalve
+weight-per-bivalve
+0.01
+0.5
+0.15
+0.01
+1
+g
+HORIZONTAL
+
+SLIDER
+535
+795
+720
+828
+weight-per-plankton
+weight-per-plankton
+0.00001
+0.0001
+4.0E-5
+0.00001
+1
+g
+HORIZONTAL
+
+SLIDER
+817
+705
+989
+738
+max-worms-mudflat
+max-worms-mudflat
+0
+500
+500
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+817
+750
+989
+783
+max-bivalves-mudflat
+max-bivalves-mudflat
+0
+500
+190
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+817
+795
+989
+828
+max-plankton-mudflat
+max-plankton-mudflat
+0
+20000
+13500
+100
+1
+NIL
+HORIZONTAL
+
+SLIDER
+987
+705
+1159
 738
 max-worms-canal
 max-worms-canal
 0
-100
-51
-1
+500
+60
+10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-465
-745
-637
-778
-max-worms-canal
-max-worms-canal
+987
+750
+1159
+783
+max-bivalves-canal
+max-bivalves-canal
 0
-100
-51
+500
+350
+10
 1
+NIL
+HORIZONTAL
+
+SLIDER
+987
+795
+1159
+828
+max-plankton-canal
+max-plankton-canal
+0
+20000
+13500
+100
 1
 NIL
 HORIZONTAL
 
 BUTTON
-1500
-280
-1597
-313
-NIL
+1325
+100
+1430
+133
+Draw canals
 draw-canals
 T
 1
@@ -914,11 +970,11 @@ NIL
 1
 
 BUTTON
-1605
-280
-1712
-313
-NIL
+1325
+140
+1432
+173
+Draw mudflats
 draw-mudflats
 T
 1
@@ -931,11 +987,11 @@ NIL
 1
 
 BUTTON
-1570
-235
-1637
-268
-NIL
+1325
+220
+1580
+253
+Fill empty patches with land
 fill-land
 NIL
 1
@@ -948,11 +1004,11 @@ NIL
 1
 
 BUTTON
-1500
-320
-1587
-353
-NIL
+1325
+180
+1430
+213
+ERASER
 erase-map
 T
 1
@@ -965,27 +1021,10 @@ NIL
 1
 
 BUTTON
-1515
-180
-1687
-213
-clear labels
-ask patches [set plabel \"\"]
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-1570
-375
-1652
-408
+1495
+60
+1577
+93
 Save map
 gis:set-world-envelope (list min-pxcor max-pxcor min-pycor max-pycor)\nset the-map gis:patch-dataset pcolor\ngis:store-dataset the-map user-input \"The map will be stored as an .asc file. If the file exists, it will be overwritten. Pick a file name (exclude extension).\"
 NIL
@@ -999,10 +1038,10 @@ NIL
 1
 
 BUTTON
-1665
-375
-1747
-408
+1415
+60
+1497
+93
 Load map
 load-map
 NIL
@@ -1016,10 +1055,10 @@ NIL
 1
 
 BUTTON
-1610
-325
-1702
-358
+1325
+60
+1417
+93
 Clean slate
 ask patches [set pcolor black]
 NIL
@@ -1033,15 +1072,207 @@ NIL
 1
 
 INPUTBOX
-1485
-455
-1625
-515
+1325
+260
+1580
+320
 map-file
 map.asc
 1
 0
 String
+
+PLOT
+15
+115
+215
+265
+Fish populations
+Days
+Nr of fish
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Red" 1.0 0 -2674135 true "" "plot count turtles with [species = \"red\"]"
+"Green" 1.0 0 -10899396 true "" "plot count turtles with [species = \"green\"]"
+
+PLOT
+15
+285
+215
+405
+Red age distribution
+Age (years)
+Nr of fish
+0.0
+30.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"Red" 1.0 1 -2674135 true "" "histogram [floor (age / 365)] of fishes with [species = \"red\"]"
+
+PLOT
+15
+405
+215
+525
+Green age distribution
+Age (years)
+Nr. of fish
+0.0
+30.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"Green" 1.0 1 -10899396 true "" "histogram [floor (age / 365)] of fishes with [species = \"green\"]"
+
+BUTTON
+1070
+20
+1167
+53
+Same as red
+set age-at-maturity-green age-at-maturity-red\nset max-age-green max-age-red\nset feeding-rate-green feeding-rate-red\nset assimilation-rate-green assimilation-rate-red\nset reproduction-threshold-green reproduction-threshold-red\nset egg-mortality-green egg-mortality-red
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+720
+705
+815
+750
+worms value
+worms-value
+2
+1
+11
+
+MONITOR
+720
+750
+815
+795
+bivalves value
+bivalves-value
+17
+1
+11
+
+MONITOR
+720
+795
+815
+840
+plankton value
+plankton-value
+17
+1
+11
+
+TEXTBOX
+717
+685
+827
+703
+Energy per prey item
+11
+0.0
+1
+
+TEXTBOX
+937
+685
+1087
+703
+CARRYING CAPACITY
+11
+0.0
+1
+
+TEXTBOX
+30
+660
+180
+678
+PREY PARAMETERS
+13
+95.0
+1
+
+TEXTBOX
+25
+685
+175
+703
+Energy gains
+11
+0.0
+1
+
+TEXTBOX
+250
+685
+400
+703
+regrowth rates
+11
+0.0
+1
+
+TEXTBOX
+542
+685
+692
+703
+individual weights
+11
+0.0
+1
+
+TEXTBOX
+1325
+35
+1570
+53
+MAP SELECTION / EDITOR
+14
+15.0
+1
+
+BUTTON
+170
+15
+242
+60
+go once
+go
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
