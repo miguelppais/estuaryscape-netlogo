@@ -12,12 +12,12 @@ globals[
 ]
 
 fishes-own [
-  energy
+  energy                  ; current energy level, limited by energy-reserve-size
   eating                  ; prey type the fish is currently eating ????
-  move-decision           ; decision whether to move or stay, by analysing current patch (for synchronization)
   species
   sex
-  reserve                 ; energy reserve
+  reserve-size            ; energy reserve size
+  maintenance-cost
   age
   stage ;juv or adult
   age-at-maturity
@@ -41,8 +41,8 @@ patches-own [
 ;; Model setup and schedule
 
 to startup
-  load-example-map
   set map-file "map.asc"
+  load-map
 end
 
 to setup
@@ -60,8 +60,7 @@ to go
   ask fishes [
     grow                              ; die if too old, increase age otherwise (also controls life stage change)
     pay-maintenance                                                    ; pay maintenance-costs or die!
-    set move-decision "undecided"                                      ; when the turn starts, every fish is undecided
-    scan-surroundings
+    move-or-stay
     move                                                               ; move or stay based on the scan decision
     eat                                                                ; fishes eat prey
   ]
@@ -71,22 +70,19 @@ to go
   regrow-prey        ; prey grows back
   diffuse worms 0.01      ; prey move to adjacent patches
   diffuse bivalves 0.01
-  diffuse plankton 0.3
+  diffuse plankton 0.2
   tick
 end
 
 
-;; FISH-RELATED PROCEDURES
-
-
+; SETUP PROCEDURES
 
 to setup-fishes
-  create-fishes number-of-fishes [
+  create-fishes initial-number-of-fishes [
     move-to-and-jitter one-of non-land-patches ; place fishes on a random patch that is not land and jitter
     set color one-of [red green]
     set sex one-of ["male" "female"]
     set shape "fish"
-    set energy energy-reserve-size - random-float (energy-reserve-size * 0.1) ; individual variability in initial energy from top 10% of max reserve size
   ]
 
   ask fishes with [color = red] [                                  ; setup red fish attributes
@@ -109,12 +105,72 @@ to setup-fishes
 
   ask fishes [
     set age random-normal (max-age / 2) ((max-age / 2) * 0.3)     ; distribute ages with the mean as half the life expectancy and a CV of 30%
-    if age < 0 [set age 0]
-    ifelse age >= age-at-maturity [set stage "adult"] [set stage "juvenile"]
+    if age < 0 [set age 0]                                        ; correct fish with negative age
+    ifelse age >= age-at-maturity [set stage "adult"] [set stage "juvenile"]   ; assign life stages
     set size 0.3 + ((age / max-age) * 0.3)                        ; scale the size according to age
+    scale-reserve-size
+    scale-maintenance
+    scale-feeding-rate
+    set energy reserve-size - (random-float 0.1 * reserve-size)
+
   ]
 
 end
+
+
+
+
+
+to pay-maintenance
+  set energy energy - maintenance-cost
+  if energy <= 0 [die] ; fish die if they can't pay maintenance
+end
+
+;; create the world
+
+to load-map
+  carefully [
+    set the-map gis:load-dataset map-file
+    gis:apply-raster the-map pcolor
+    ask patches [
+      if pcolor = 96 [set habitat "canal"]
+      if pcolor = 37 [set habitat "mudflat"]
+      if pcolor = green [set habitat "land"]
+    ]
+    ] [create-map-file]
+
+  set non-land-patches patches with [habitat != "land"]
+end
+
+to setup-environment      ; observer procedure
+  ask non-land-patches [
+    set green.eggs n-values days-until-hatch [0]                    ; eggs are initialized as lists of length "days-until-hatch"
+    set red.eggs n-values days-until-hatch [0]
+  ]
+  ask non-land-patches with [habitat = "mudflat"] [
+    set worms random max-worms-mudflat
+    set bivalves random max-bivalves-mudflat
+    set plankton random max-plankton-mudflat
+  ]
+  ask non-land-patches with [habitat = "canal"] [
+
+  ]
+end
+
+;; FISH-RELATED PROCEDURES
+
+to scale-reserve-size                                                ; reserve size starts at 50% max when age = 0 and increases until 100% at age-at-maturity
+  set reserve-size max-energy-reserve - ((0.5 * (1 - (age / age-at-maturity))) * max-energy-reserve)
+end
+
+to scale-maintenance                                                  ; maintenance cost starts at 30% max when age = 0 and increases until 100% at age-at-maturity
+  set maintenance-cost max-maintenance-cost - ((0.7 * (1 - (age / age-at-maturity))) * max-maintenance-cost)
+end
+
+to scale-feeding-rate                                                 ; feeding rate starts at 30% max when age = 0 and increases until 100% at age-at-maturity
+  set feeding-rate feeding-rate - ((0.7 * (1 - (age / age-at-maturity))) * feeding-rate)
+end
+
 
 to move-to-and-jitter [p] ; moves to a patch and jitters fish coordinates within patch for easier visualization
   let x [pxcor] of p
@@ -123,55 +179,55 @@ to move-to-and-jitter [p] ; moves to a patch and jitters fish coordinates within
 end
 
 
-
-to pay-maintenance
-  set energy energy - maintenance-cost
-  if energy <= 0 [die] ; fish die if they can't pay maintenance
-
-end
-
-
-
 to grow
   if age >= max-age [die]
   set age age + 1
-  if age >= age-at-maturity [set stage "adult"]
+  if age = age-at-maturity [set stage "adult"]                 ; puberty...
   set size 0.3 + ((age / max-age) * 0.3)                        ; scale the size according to age
+  scale-reserve-size
+  scale-maintenance
 end
 
 ;; fishes decide whether to stay or move based on the conditions of the current patch
 
-to scan-surroundings
+to move-or-stay
 
-  ifelse (stage = "adult" and energy > reproduction-threshold) [               ; thought process of horny adults
-    ifelse any? fishes-here with [sex != [sex] of myself and species = [species] of myself] [
-      set move-decision "stay"
-    ] [
-    set move-decision "move"
-    ] ; end ifelse
+  if (stage = "adult" and energy > reproduction-threshold) [               ; thought process of horny adults
+    ifelse any? fishes-here with [sex != [sex] of myself and species = [species] of myself] [stay] [move]
+  ]
 
-  ] [
+  if (stage = "adult" and energy <= reproduction-threshold) [
+    scan-prey
+  ]
 
-  if eating = "worms" []                                                        ; thought process of hungry adults
 
-  ]   ; end ifelse
+  if (age >= 365 and stage = "juvenile") [
+    scan-prey
+  ]
 
- end
-
-to move
-
-  ifelse move-decision = "stay" [
-   set energy energy - small-movement-cost
-  ] [
-   set energy energy - large-movement-cost
-   move-to-and-jitter one-of neighbors with [habitat != "land"]
+  if (age <= 365) [
+    let required-energy (reserve-size - energy)
   ]
 
 end
 
+to scan-prey   ; fish procedure
+  let required-energy ((max-energy-reserve * (age / max-age)) - energy)
+
+end
+
+to move          ; fish procedure
+  set energy energy - large-movement-cost
+  move-to-and-jitter one-of neighbors with [habitat != "land"]
+end
+
+to stay          ; fish procedure
+  set energy energy - small-movement-cost
+end
+
 ;; fishes eat prey
 
-to eat                                                     ; consider having a fitness measure controlling who gets the best prey
+to eat                                                     ; consider having a fitness measure controlling who gets the prey
   let prey-amount 0
   ;; check to make sure there is worms here
   if ( worms >= energy-gain-from-worms ) [
@@ -179,7 +235,6 @@ to eat                                                     ; consider having a f
     set energy energy + energy-gain-from-worms
     ;; decrement the worms
     set worms worms - energy-gain-from-worms
-    recolor-patches
   ]
 end
 
@@ -195,7 +250,7 @@ to fish-reproduction     ; observer procedure
     ]
     let green-female-gametes sum [nr-gametes] of green-reproductive-adults with [sex = "female"]
     let green-male-gametes sum [nr-gametes] of green-reproductive-adults with [sex = "male"]
-    set green.eggs fput (min list green-female-gametes green-male-gametes) green.eggs ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
+    set green.eggs replace-item ((min list green-female-gametes green-male-gametes) * (1 - egg-mortality-green)) green.eggs 0 ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
     ask green-reproductive-adults [set nr-gametes 0]
   ]
 
@@ -207,7 +262,7 @@ to fish-reproduction     ; observer procedure
     ]
     let red-female-gametes sum [nr-gametes] of red-reproductive-adults with [sex = "female"]
     let red-male-gametes sum [nr-gametes] of red-reproductive-adults with [sex = "male"]
-    set red.eggs sentence red.eggs (n-values (min list red-female-gametes red-male-gametes) [0])
+    set red.eggs replace-item (min list red-female-gametes red-male-gametes * (1 - egg-mortality-red)) red.eggs 0  ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
     ask red-reproductive-adults [set nr-gametes 0]
   ]
 
@@ -220,82 +275,63 @@ end
 
 
 
-;; create the world
-
-to load-map
-  set the-map gis:load-dataset map-file
-  gis:apply-raster the-map pcolor
-  ask patches [
-    if pcolor = 96 [set habitat "canal"]
-    if pcolor = 37 [set habitat "mudflat"]
-    if pcolor = green [set habitat "land"]
-  ]
-  set non-land-patches patches with [habitat != "land"]
-end
-
-to setup-environment      ; observer procedure
-  ask non-land-patches [
-    set green.eggs []                    ; eggs are initialized as empty lists
-    set red.eggs []
-  ]
-  ask non-land-patches with [habitat = "mudflat"] [
-    set worms random max-worms-mudflat
-    set bivalves random max-bivalves-mudflat
-    set plankton random max-plankton-mudflat
-  ]
-  ask non-land-patches with [habitat = "canal"] [
-
-  ]
-end
-
 to egg-development             ; observer procedure
   ask non-land-patches [
-    set green.eggs map [? + 1] green.eggs
-    set red.eggs map [? + 1] red.eggs
+    set green.eggs remove-item (days-until-hatch - 1) green.eggs                         ; the eggs list shifts one position to the right, the last item being the eggs ready to hatch on the current tick
+    set red.eggs remove-item (days-until-hatch - 1) red.eggs
+
+    set green.eggs fput 0 green.eggs
+    set red.eggs fput 0 red.eggs
   ]
 end
 
 
 to hatch-eggs                  ; observer procedure
-  ask non-land-patches with [(length (filter [? >= days-until-hatch] green.eggs) > 0) or (length (filter [? >= days-until-hatch] red.eggs) > 0)] [
-  let nr-green-eggs length (filter [? >= days-until-hatch] green.eggs)
-  let nr-red-eggs length (filter [? >= days-until-hatch] red.eggs)
-  if nr-green-eggs > 0 [
-    set green.eggs remove days-until-hatch green.eggs
+  ask non-land-patches with [last green.eggs > 0] [          ; hatch green eggs
+  let nr-green-eggs last green.eggs
+  set green.eggs replace-item (days-until-hatch - 1) green.eggs 0       ;eggs hatched, so they are removed from the patch variable
 
-    sprout-fishes nr-green-eggs [
-      set sex one-of ["male" "female"]
-      set shape "fish"
-      set energy energy-reserve-size - random-float (energy-reserve-size * 0.1)
-      set species "green"
-      set age 0
-      set size 0.3 + ((age / max-age) * 0.3)                        ; scale the size according to age
-      set age-at-maturity age-at-maturity-green * 365                ; convert age to days (ticks)
-      set max-age max-age-green * 365
-      set feeding-rate feeding-rate-green
-      set assimilation-rate assimilation-rate-green
-      set reproduction-threshold reproduction-threshold-green
-      move-to-and-jitter one-of non-land-patches    ; fish juveniles settle at a random non-land location
+  sprout-fishes nr-green-eggs [
+    set sex one-of ["male" "female"]
+    set shape "fish"
+    set species "green"
+    set age 0
+    set size 0.3
+    set age-at-maturity age-at-maturity-green * 365                ; convert age to days (ticks)
+    set max-age max-age-green * 365
+    set feeding-rate feeding-rate-green
+    set assimilation-rate assimilation-rate-green
+    set reproduction-threshold reproduction-threshold-green
+    scale-reserve-size
+    scale-maintenance
+    scale-feeding-rate
+    set energy reserve-size - (random-float 0.1 * reserve-size)
+    move-to-and-jitter one-of non-land-patches    ; fish juveniles settle at a random non-land location
     ]
-    ]
-  if nr-red-eggs > 0 [
-    set red.eggs remove days-until-hatch red.eggs
+  ]
+
+  ask non-land-patches with [last red.eggs > 0] [           ; hatch red eggs
+    let nr-red-eggs last red.eggs
+    set red.eggs replace-item 9 red.eggs 0       ;eggs hatched, so they are removed from the patch variable
+
 
     sprout-fishes nr-red-eggs [
       set sex one-of ["male" "female"]
       set shape "fish"
-      set energy energy-reserve-size - random-float (energy-reserve-size * 0.1)
       set species "red"
       set age 0
-      set size 0.3 + ((age / max-age) * 0.3)                        ; scale the size according to age
+      set size 0.3
       set age-at-maturity age-at-maturity-red * 365                ; convert age to days (ticks)
       set max-age max-age-red * 365
       set feeding-rate feeding-rate-red
       set assimilation-rate assimilation-rate-red
       set reproduction-threshold reproduction-threshold-red
+      scale-reserve-size
+      scale-maintenance
+      scale-feeding-rate
+      set energy reserve-size - (random-float 0.1 * reserve-size)
       move-to-and-jitter one-of non-land-patches    ; fish juveniles settle at a random non-land location
     ]
-  ]
   ]
 end
 
@@ -345,7 +381,13 @@ end
 
 ; PLOTTING AND OUTPUTS
 
+to-report percent-mudflat
+  report precision ((count patches with [habitat = "mudflat"] / count patches with [habitat != "land"]) * 100) 1
+end
 
+to-report percent-canal
+  report precision ((count patches with [habitat = "canal"] / count patches with [habitat != "land"]) * 100) 1
+end
 
 
 
@@ -390,7 +432,7 @@ end
 
 
 
-to load-example-map
+to create-map-file
 
 set the-map
 [
@@ -539,8 +581,8 @@ SLIDER
 70
 240
 103
-number-of-fishes
-number-of-fishes
+initial-number-of-fishes
+initial-number-of-fishes
 10
 500
 500
@@ -753,7 +795,7 @@ assimilation-rate-red
 assimilation-rate-red
 0
 100
-50
+10
 5
 1
 %
@@ -768,7 +810,7 @@ assimilation-rate-green
 assimilation-rate-green
 0
 100
-50
+10
 5
 1
 %
@@ -779,8 +821,8 @@ SLIDER
 505
 1222
 538
-maintenance-cost
-maintenance-cost
+max-maintenance-cost
+max-maintenance-cost
 0
 100
 20
@@ -899,8 +941,8 @@ SLIDER
 370
 1222
 403
-energy-reserve-size
-energy-reserve-size
+max-energy-reserve
+max-energy-reserve
 10
 1500
 1500
@@ -1083,7 +1125,7 @@ BUTTON
 220
 1580
 253
-Fill empty patches with land
+Fill black patches with land
 fill-land
 NIL
 1
@@ -1365,6 +1407,28 @@ NIL
 NIL
 NIL
 1
+
+MONITOR
+255
+545
+325
+590
+% mudflat
+percent-mudflat
+17
+1
+11
+
+MONITOR
+330
+545
+400
+590
+% canal
+percent-canal
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
