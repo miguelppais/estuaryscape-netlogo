@@ -1,4 +1,8 @@
-;;ESTUARYSCAPE MODEL
+;;;;;;;;;;;;;;;;;;;;;;
+;;                  ;;     Created as a final project for the intro to ABM MOOC 2016
+;;ESTUARYSCAPE MODEL;;                     by Complexity Explorer
+;;                  ;;
+;;;;;;;;;;;;;;;;;;;;;;
 
 extensions [gis]
 
@@ -9,33 +13,34 @@ breed [fishes fish]
 globals[
   the-map
   non-land-patches       ; an agentset of patches that excludes land patches, to avoid unnecessary calculations happening in land
+
+  ; globals on the interface
+
+
 ]
 
 fishes-own [
   energy                  ; current energy level, limited by energy-reserve-size
-  eating                  ; prey type the fish is currently eating ????
-  species
-  sex
-  reserve-size            ; energy reserve size
-  maintenance-cost
-  age
-  stage ;juv or adult
-  age-at-maturity
-  max-age
+  species                 ; green or red species
+  sex                     ; male, female or undecided (joking, just male or female really)
+  reserve-size            ; maximum energy reserve size
+  maintenance-cost        ; energy cost to maintain bodily functions (metabolism,respiration, osmotic regulation, etc)
+  age                     ; age (in days)
+  stage                   ; juvenile or adult
+  age-at-maturity         ; age at which a fish becomes and adult (able to reproduce)
+  max-age                 ; maximum age for fish (instant death lies beyond this point)
   nr-gametes              ; nr of gametes produced by adults
-  feeding-rate
-  assimilation-rate
-  reproduction-threshold
+  feeding-rate            ; max amount of prey grams per day
+  reproduction-threshold  ; energy amount over which an adult fish can produce and release gametes
   ]
 
 patches-own [
-  patch-id ; unique number to identify each patch
   worms
   bivalves
   plankton
   habitat ; canal or mudflat
-  red.eggs ; red fish eggs
-  green.eggs ; green fish eggs
+  red.eggs ; red fish eggs, coded as a list with the length equal to "days-until-hatch". The first item is the amount of eggs released on the present day, the last item is eggs who have been here for "days-until-hatch" days and are ready to hatch.
+  green.eggs ; green fish eggs, see the description above
   ]
 
 ;; Model setup and schedule
@@ -61,10 +66,9 @@ to go
   ask fishes [
     grow                              ; die if too old, increase age otherwise (also controls life stage change)
     pay-maintenance                                                    ; pay maintenance-costs or die!
-    move-or-stay
-    move                                                               ; move or stay based on the scan decision
-    eat                                                                ; fishes eat prey
+    move-or-stay                                                       ; move or stay based on the scan decision
   ]
+  fish-eat-prey
   egg-development     ; eggs age advances
   hatch-eggs          ; eggs that reach full development hatch
   fish-reproduction  ; fish reproduce
@@ -91,7 +95,6 @@ to setup-fishes
     set age-at-maturity age-at-maturity-red * 365                 ; convert age to days (ticks)
     set max-age max-age-red * 365
     set feeding-rate feeding-rate-red
-    set assimilation-rate assimilation-rate-red
     set reproduction-threshold reproduction-threshold-red
   ]
 
@@ -100,7 +103,6 @@ to setup-fishes
     set age-at-maturity age-at-maturity-green * 365                ; convert age to days (ticks)
     set max-age max-age-green * 365
     set feeding-rate feeding-rate-green
-    set assimilation-rate assimilation-rate-green
     set reproduction-threshold reproduction-threshold-green
   ]
 
@@ -228,6 +230,8 @@ end
 
 ; fish evaluate the amount of energy they need and the available energy at the current patch, and wether this energy will be shared with other fish
 
+; TO DO : CONSIDER CHECKING ONLY FOR FISH BIGGER THAN MYSELF
+
 to scan-prey   ; fish procedure
   let required-energy 0
   let worms-available-energy 0
@@ -255,16 +259,80 @@ to stay          ; fish procedure                      ; fish just move within t
   set energy energy - small-movement-cost
 end
 
-;; fishes eat prey
 
-to eat                                                     ; consider having a fitness measure controlling who gets the prey
-  let prey-amount 0
-  ;; check to make sure there is worms here
-  if ( worms >= energy-gain-from-worms ) [
-    ;; increment the fishes's energy
-    set energy energy + energy-gain-from-worms
-    ;; decrement the worms
-    set worms worms - energy-gain-from-worms
+; The extremely complex thought process of fish as they pick which prey to eat based on their needs.
+
+to eat                 ; fish procedure
+  ifelse age <= 365 [                                                                   ; if you are a young planktion eater
+    if plankton = 0 [stop]                                                              ; if there's no plankton here, I'm not eating today
+    let required-amount ceiling ((reserve-size - energy) / (energy-gain-from-plankton)) ; required amount (in grams)
+    if required-amount > feeding-rate [set required-amount feeding-rate]                ; required amount is limited by feeding rate
+    let available-amount (plankton * weight-per-plankton)                               ; available amount (in grams)
+    let consumed-amount  min list required-amount available-amount       ; each fish consumes the minimum value among required and available
+    ask patch-here [
+      set plankton plankton - ceiling (consumed-amount / weight-per-plankton)            ; eat the number of plankton required
+    ]
+    set energy energy + ceiling (consumed-amount / weight-per-plankton) * plankton-value ; replenish energy
+
+  ] [ ; else                                                                                ; if you can eat big prey
+  if worms = 0 and bivalves = 0 [stop]                                                      ; if there are no big prey, I'm not eating today
+  let required-amount-worms ceiling ((reserve-size - energy) / (energy-gain-from-worms)) ; required amount of worms (in grams)
+  let required-amount-bivalves ceiling ((reserve-size - energy) / (energy-gain-from-bivalves))  ; required amount of bivalves (in grams)
+  if required-amount-worms > feeding-rate [set required-amount-worms feeding-rate]             ; required amounts are limited by feeding rates
+  if required-amount-bivalves > feeding-rate [set required-amount-bivalves feeding-rate]
+  let available-amount-worms (worms * weight-per-worm)                               ; available amount (in grams)
+  let available-amount-bivalves (bivalves * weight-per-bivalve)
+  let chosen-prey "none"                                             ; create local variable
+  let consumed-amount 0                                             ; create local variable
+  if ((required-amount-worms - available-amount-worms <= 0) and (required-amount-bivalves - available-amount-bivalves <= 0)) [   ; if any prey can fill up energy, pick the one that can do it with less quantity
+    ifelse required-amount-worms < required-amount-bivalves [
+      set chosen-prey "worms"
+      set consumed-amount required-amount-worms
+      ] [
+      set chosen-prey "bivalves"
+      set consumed-amount required-amount-bivalves
+      ]
+  ]
+  if ((required-amount-worms - available-amount-worms <= 0) and (required-amount-bivalves - available-amount-bivalves > 0)) [   ; if only worms can fill up energy, eat  worms
+    set chosen-prey "worms"
+    set consumed-amount required-amount-worms
+  ]
+  if ((required-amount-worms - available-amount-worms > 0) and (required-amount-bivalves - available-amount-bivalves <= 0)) [   ; if only bivalves can fill up energy, eat bivalves
+    set chosen-prey "bivalves"
+    set consumed-amount required-amount-bivalves
+  ]
+  if ((required-amount-worms - available-amount-worms > 0) and (required-amount-bivalves - available-amount-bivalves > 0)) [   ; if none of the prey can fill up energy, pick the one which can provide more energy that day and eat what's available
+    ifelse (available-amount-worms * energy-gain-from-worms) > (available-amount-bivalves * energy-gain-from-bivalves) [
+      set chosen-prey "worms"
+      set consumed-amount available-amount-worms
+      ] [
+      set chosen-prey "bivalves"
+      set consumed-amount available-amount-bivalves
+      ]
+  ]
+  ask patch-here [
+    ifelse chosen-prey = "worms" [set worms worms - ceiling (consumed-amount / weight-per-worm)   ; deplete worms or bivalves from the patch depending on chosen prey
+    ] [
+    set bivalves bivalves - ceiling (consumed-amount / weight-per-bivalve)
+    ]
+  ]
+  ifelse chosen-prey = "worms" [set energy energy + ceiling (consumed-amount / weight-per-worm) * worms-value ; gain energy from worms or bivalves depending on chosen prey
+  ] [
+  set energy energy + ceiling (consumed-amount / weight-per-bivalve) * bivalves-value
+  ]
+  ] ; end ifelse
+end
+
+to fish-eat-prey  ; observer procedure
+  ask fishes with [not any? other fishes-here] [eat]                          ; fish who are alone eat the most valuable prey if there is enough quantity
+
+  ask non-land-patches with [count fishes-here > 1] [sort-out-competition]    ; when there are crowded patches, the patch handles prey distribution
+
+end
+
+to sort-out-competition ; patch procedure
+  foreach sort-on [0 - size] fishes-here [          ; fishes eat in descending order of size (proxy of age)
+   eat
   ]
 end
 
@@ -330,7 +398,6 @@ to hatch-eggs                  ; observer procedure
     set age-at-maturity age-at-maturity-green * 365                ; convert age to days (ticks)
     set max-age max-age-green * 365
     set feeding-rate feeding-rate-green
-    set assimilation-rate assimilation-rate-green
     set reproduction-threshold reproduction-threshold-green
     scale-reserve-size
     scale-maintenance
@@ -354,7 +421,6 @@ to hatch-eggs                  ; observer procedure
       set age-at-maturity age-at-maturity-red * 365                ; convert age to days (ticks)
       set max-age max-age-red * 365
       set feeding-rate feeding-rate-red
-      set assimilation-rate assimilation-rate-red
       set reproduction-threshold reproduction-threshold-red
       scale-reserve-size
       scale-maintenance
@@ -366,8 +432,6 @@ to hatch-eggs                  ; observer procedure
 end
 
 
-
-;; regrow prey
 to regrow-prey              ; obsever procedure
   ask non-land-patches [
     set worms worms + (worms-regrowth-rate * worms)
@@ -389,7 +453,7 @@ to regrow-prey              ; obsever procedure
   ]
 end
 
-; PREY REPORTERS
+;; PREY REPORTERS
 
 to-report worms-value
 report energy-gain-from-worms * weight-per-worm
@@ -410,6 +474,8 @@ to recolor-patches   ; alternative visualization to look at prey abundances?  TO
 end
 
 ; PLOTTING AND OUTPUTS
+
+; plot code is in the plots on the interface tap
 
 to-report percent-mudflat
   report precision ((count patches with [habitat = "mudflat"] / count patches with [habitat != "land"]) * 100) 1
@@ -458,7 +524,7 @@ to fill-land
 end
 
 
-;; MAPS ;;
+;; MAPS
 
 
 
@@ -535,7 +601,7 @@ user-message "Welcome! The default map has been loaded and saved as a map.asc fi
 end
 
 
-; USEFUL REPORTERS
+;; USEFUL REPORTERS
 
 to-report random-float-between [a b]
   report a + random-float (b - a)
@@ -653,9 +719,9 @@ HORIZONTAL
 
 SLIDER
 1050
-470
+430
 1222
-503
+463
 large-movement-cost
 large-movement-cost
 0
@@ -817,40 +883,10 @@ g per day
 HORIZONTAL
 
 SLIDER
-795
-210
-972
-243
-assimilation-rate-red
-assimilation-rate-red
-0
-100
-85
-5
-1
-%
-HORIZONTAL
-
-SLIDER
-1045
-210
-1237
-243
-assimilation-rate-green
-assimilation-rate-green
-0
-100
-85
-5
-1
-%
-HORIZONTAL
-
-SLIDER
 1050
-505
+465
 1222
-538
+498
 max-maintenance-cost
 max-maintenance-cost
 0
@@ -863,9 +899,9 @@ HORIZONTAL
 
 SLIDER
 1050
-435
+395
 1222
-468
+428
 small-movement-cost
 small-movement-cost
 0
@@ -878,9 +914,9 @@ HORIZONTAL
 
 SLIDER
 790
-255
+215
 987
-288
+248
 reproduction-threshold-red
 reproduction-threshold-red
 0
@@ -893,9 +929,9 @@ HORIZONTAL
 
 SLIDER
 1040
-255
+215
 1252
-288
+248
 reproduction-threshold-green
 reproduction-threshold-green
 0
@@ -907,10 +943,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-825
-370
-1000
-403
+800
+305
+975
+338
 cost-per-gamete
 cost-per-gamete
 0.0005
@@ -922,10 +958,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-825
-405
-1000
-438
+800
+340
+975
+373
 days-until-hatch
 days-until-hatch
 1
@@ -938,9 +974,9 @@ HORIZONTAL
 
 SLIDER
 795
-295
+255
 967
-328
+288
 egg-mortality-red
 egg-mortality-red
 0
@@ -953,9 +989,9 @@ HORIZONTAL
 
 SLIDER
 1045
-295
+255
 1222
-328
+288
 egg-mortality-green
 egg-mortality-green
 0
@@ -968,9 +1004,9 @@ HORIZONTAL
 
 SLIDER
 1050
-370
+330
 1222
-403
+363
 max-energy-reserve
 max-energy-reserve
 10
@@ -1307,7 +1343,7 @@ BUTTON
 1167
 53
 Same as red
-set age-at-maturity-green age-at-maturity-red\nset max-age-green max-age-red\nset feeding-rate-green feeding-rate-red\nset assimilation-rate-green assimilation-rate-red\nset reproduction-threshold-green reproduction-threshold-red\nset egg-mortality-green egg-mortality-red
+set age-at-maturity-green age-at-maturity-red\nset max-age-green max-age-red\nset feeding-rate-green feeding-rate-red\nset reproduction-threshold-green reproduction-threshold-red\nset egg-mortality-green egg-mortality-red
 NIL
 1
 T
@@ -1396,7 +1432,7 @@ TEXTBOX
 685
 400
 703
-regrowth rates
+population growth rates
 11
 0.0
 1
@@ -1464,7 +1500,7 @@ TEXTBOX
 270
 590
 310
-606
+608
 brown
 15
 35.0
@@ -1474,7 +1510,7 @@ TEXTBOX
 350
 590
 385
-606
+608
 blue
 15
 96.0
