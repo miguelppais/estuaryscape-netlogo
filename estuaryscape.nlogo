@@ -39,6 +39,8 @@ patches-own [
   bivalves
   plankton
   habitat ; canal or mudflat
+  green-newcomers
+  red-newcomers
   red.eggs ; red fish eggs, coded as a list with the length equal to "days-until-hatch". The first item is the amount of eggs released on the present day, the last item is eggs who have been here for "days-until-hatch" days and are ready to hatch.
   green.eggs ; green fish eggs, see the description above
   ]
@@ -73,9 +75,6 @@ to go
   hatch-eggs                          ; eggs that reach full development hatch
   fish-reproduction                   ; fish reproduce
   regrow-prey                         ; prey grows back
-  diffuse worms 0.01                  ; prey move to adjacent patches
-  diffuse bivalves 0.01
-  diffuse plankton 0.2
   tick
 end
 
@@ -149,7 +148,9 @@ to setup-environment      ; observer procedure
     set plankton random max-plankton-mudflat
   ]
   ask non-land-patches with [habitat = "canal"] [
-
+    set worms random max-worms-canal
+    set bivalves random max-bivalves-canal
+    set plankton random max-plankton-canal
   ]
 end
 
@@ -230,24 +231,24 @@ end
 
 ;; FISH-RELATED PROCEDURES
 
-to scale-reserve-size                                                ; reserve size starts at 50% max when age = 0 and increases until 100% at age-at-maturity
+to scale-reserve-size  ; fish procedure                                           ; reserve size starts at 50% max when age = 0 and increases until 100% at age-at-maturity
   set reserve-size max-energy-reserve - ((0.5 * (1 - (age / age-at-maturity))) * max-energy-reserve)
 end
 
-to scale-maintenance                                                  ; maintenance cost starts at 30% max when age = 0 and increases until 100% at age-at-maturity
+to scale-maintenance ; fish procedure                                                 ; maintenance cost starts at 30% max when age = 0 and increases until 100% at age-at-maturity
   set maintenance-cost max-maintenance-cost - ((0.7 * (1 - (age / age-at-maturity))) * max-maintenance-cost)
 end
 
-to scale-feeding-rate                                                 ; feeding rate starts at 30% max when age = 0 and increases until 100% at age-at-maturity
-  set feeding-rate feeding-rate - ((0.7 * (1 - (age / age-at-maturity))) * feeding-rate)
+to scale-feeding-rate   ; fish procedure                                              ; feeding rate starts at 10% max when age = 0 and increases until 100% at age-at-maturity
+  set feeding-rate feeding-rate - ((0.9 * (1 - (age / age-at-maturity))) * feeding-rate)
 end
 
-to pay-maintenance
+to pay-maintenance ; fish procedure
   set energy energy - maintenance-cost
   if energy <= 0 [die] ; fish die if they can't pay maintenance
 end
 
-to move-to-and-jitter [p] ; moves to a patch and jitters fish coordinates within patch for easier visualization
+to move-to-and-jitter [p] ; fish procedure                                      ; moves to a patch and jitters fish coordinates within patch for easier visualization
   let x [pxcor] of p
   let y [pycor] of p
   setxy (x + random-float-between -0.49 0.49) (y + random-float-between -0.49 0.49)
@@ -420,7 +421,7 @@ to fish-reproduction     ; observer procedure
     ]
     let green-female-gametes sum [nr-gametes] of green-reproductive-adults with [sex = "female"]
     let green-male-gametes sum [nr-gametes] of green-reproductive-adults with [sex = "male"]
-    set green.eggs replace-item ((min list green-female-gametes green-male-gametes) * (1 - (egg-mortality-green / 100))) green.eggs 0 ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
+    set green.eggs replace-item 0 green.eggs ((min list green-female-gametes green-male-gametes) * (1 - (egg-mortality-green / 100))) ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
     ask green-reproductive-adults [set nr-gametes 0]
   ]
 
@@ -432,7 +433,7 @@ to fish-reproduction     ; observer procedure
     ]
     let red-female-gametes sum [nr-gametes] of red-reproductive-adults with [sex = "female"]
     let red-male-gametes sum [nr-gametes] of red-reproductive-adults with [sex = "male"]
-    set red.eggs replace-item (min list red-female-gametes red-male-gametes * (1 - (egg-mortality-red / 100))) red.eggs 0  ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
+    set red.eggs replace-item 0 red.eggs ((min list red-female-gametes red-male-gametes) * (1 - (egg-mortality-red / 100)))  ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
     ask red-reproductive-adults [set nr-gametes 0]
   ]
 
@@ -460,8 +461,73 @@ to hatch-eggs                  ; observer procedure
   ask non-land-patches with [last green.eggs > 0] [          ; hatch green eggs
   let nr-green-eggs last green.eggs
   set green.eggs replace-item (days-until-hatch - 1) green.eggs 0       ;eggs hatched, so they are removed from the patch variable
+  let number-patches 0
+  ifelse nr-green-eggs > count non-land-patches / 2 [
+    set number-patches random-between (floor count non-land-patches / 4) (floor count non-land-patches / 2)
+    ] [
+    set number-patches random-between 1 nr-green-eggs
+    ]
+  ask n-of number-patches non-land-patches [
+    set green-newcomers green-newcomers + nr-green-eggs / number-patches
+    ]
+  ]
+  ask non-land-patches with [last red.eggs > 0] [          ; hatch red eggs
+  let nr-red-eggs last red.eggs
+  set red.eggs replace-item (days-until-hatch - 1) red.eggs 0       ;eggs hatched, so they are removed from the patch variable
+  let number-patches 0
+  ifelse nr-red-eggs > count non-land-patches / 2 [
+    set number-patches random-between (floor count non-land-patches / 4) (floor count non-land-patches / 2)
+    ] [
+    set number-patches random-between 1 nr-red-eggs
+    ]
+  ask n-of number-patches non-land-patches [
+    set red-newcomers red-newcomers + nr-red-eggs / number-patches
+    ]
+  ]
 
-  sprout-fishes nr-green-eggs [
+  ask non-land-patches with [green-newcomers > 0 and red-newcomers > 0] [
+    let carrying-capacity floor (plankton * weight-per-plankton) / (feeding-rate-green * 0.1)
+    let settled-greens min list (floor (carrying-capacity / 4)) green-newcomers
+    let settled-reds min list (floor (carrying-capacity / 4)) red-newcomers
+    settle-greens settled-greens
+    settle-reds settled-reds
+  ]
+
+  ask non-land-patches with [green-newcomers = 0 and red-newcomers > 0] [
+    let carrying-capacity (plankton * weight-per-plankton) / (feeding-rate-green * 0.1)
+    let settled-reds min list (carrying-capacity / 2) green-newcomers
+    settle-reds settled-reds
+  ]
+
+  ask non-land-patches with [green-newcomers > 0 and red-newcomers = 0] [
+    let carrying-capacity (plankton * weight-per-plankton) / (feeding-rate-green * 0.1)
+    let settled-greens min list (carrying-capacity / 2) green-newcomers
+    settle-greens settled-greens
+  ]
+
+end
+
+to settle-reds [nr] ; patch procedure
+  sprout-fishes nr [
+    set sex one-of ["male" "female"]
+    set shape "fish"
+    set species "red"
+    set age 0
+    set size 0.3
+    set age-at-maturity age-at-maturity-red * 365                ; convert age to days (ticks)
+    set max-age max-age-red * 365
+    set feeding-rate feeding-rate-red
+    set reproduction-threshold reproduction-threshold-red
+    scale-reserve-size
+    scale-maintenance
+    scale-feeding-rate
+    set energy reserve-size - (random-float 0.1 * reserve-size)
+    move-to-and-jitter one-of non-land-patches    ; fish juveniles settle at a random non-land location
+  ]
+end
+
+to settle-greens [nr]   ; patch procedure
+  sprout-fishes nr [
     set sex one-of ["male" "female"]
     set shape "fish"
     set species "green"
@@ -475,40 +541,14 @@ to hatch-eggs                  ; observer procedure
     scale-maintenance
     scale-feeding-rate
     set energy reserve-size - (random-float 0.1 * reserve-size)
-    move-to-and-jitter one-of non-land-patches    ; fish juveniles settle at a random non-land location
     ]
-  ]
-
-  ask non-land-patches with [last red.eggs > 0] [           ; hatch red eggs
-    let nr-red-eggs last red.eggs
-    set red.eggs replace-item 9 red.eggs 0       ;eggs hatched, so they are removed from the patch variable
-
-
-    sprout-fishes nr-red-eggs [
-      set sex one-of ["male" "female"]
-      set shape "fish"
-      set species "red"
-      set age 0
-      set size 0.3
-      set age-at-maturity age-at-maturity-red * 365                ; convert age to days (ticks)
-      set max-age max-age-red * 365
-      set feeding-rate feeding-rate-red
-      set reproduction-threshold reproduction-threshold-red
-      scale-reserve-size
-      scale-maintenance
-      scale-feeding-rate
-      set energy reserve-size - (random-float 0.1 * reserve-size)
-      move-to-and-jitter one-of non-land-patches    ; fish juveniles settle at a random non-land location
-    ]
-  ]
 end
-
 
 to regrow-prey              ; obsever procedure
   ask non-land-patches [
-    set worms worms + (worms-regrowth-rate * worms)
-    set bivalves bivalves + (bivalves-regrowth-rate * bivalves)
-    set plankton plankton + (plankton-regrowth-rate * plankton)
+    set worms worms + worms-regrowth-rate
+    set bivalves bivalves + bivalves-regrowth-rate
+    set plankton plankton + plankton-regrowth-rate
 
     ; limit the amount of prey to the carrying capacity of the habitat
 
@@ -668,7 +708,7 @@ initial-number-of-fishes
 initial-number-of-fishes
 10
 500
-200
+300
 5
 1
 NIL
@@ -686,7 +726,7 @@ worms-regrowth-rate
 20
 1
 1
-/ worm / day
+/ day
 HORIZONTAL
 
 SLIDER
@@ -731,7 +771,7 @@ bivalves-regrowth-rate
 20
 1
 1
-/ bivalve / day
+/ day
 HORIZONTAL
 
 SLIDER
@@ -746,7 +786,7 @@ plankton-regrowth-rate
 7000
 100
 1
-/ plankton / day
+/ day
 HORIZONTAL
 
 SLIDER
@@ -936,10 +976,10 @@ SLIDER
 338
 cost-per-gamete
 cost-per-gamete
-0.0005
-0.005
-0.005
-0.0005
+0.01
+1
+0.6
+0.01
 1
 NIL
 HORIZONTAL
@@ -968,7 +1008,7 @@ egg-mortality-red
 egg-mortality-red
 0
 100
-40
+80
 5
 1
 %
@@ -983,7 +1023,7 @@ egg-mortality-green
 egg-mortality-green
 0
 100
-40
+80
 5
 1
 %
@@ -991,14 +1031,14 @@ HORIZONTAL
 
 SLIDER
 1050
-330
+310
 1222
-363
+343
 max-energy-reserve
 max-energy-reserve
 10
-1500
-1500
+1000
+1000
 10
 1
 NIL
@@ -1230,7 +1270,7 @@ BUTTON
 1650
 320
 Load map
-load-map
+setup
 NIL
 1
 T
@@ -1549,6 +1589,75 @@ count fishes with [species = \"green\"]
 17
 1
 11
+
+MONITOR
+825
+400
+965
+445
+max egg production red
+floor ((1 - (egg-mortality-red / 100)) * (max-energy-reserve - reproduction-threshold-red) / cost-per-gamete)
+17
+1
+11
+
+MONITOR
+825
+445
+965
+490
+max egg production green
+floor ((1 - (egg-mortality-green / 100)) * (max-energy-reserve - reproduction-threshold-green) / cost-per-gamete)
+17
+1
+11
+
+BUTTON
+465
+575
+582
+608
+display plankton
+ask non-land-patches [\nset pcolor scale-color pcolor plankton 0 50\n]\ndisplay
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+1160
+705
+1332
+738
+worms-diffuse-rate
+worms-diffuse-rate
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+1160
+750
+1332
+783
+bivalves-diffuse-rate
+bivalves-diffuse-rate
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
