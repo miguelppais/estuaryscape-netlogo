@@ -6,15 +6,15 @@
 
 extensions [gis]
 
-;; Parameters not in the interface
-
 breed [fishes fish]
 
 globals[
   the-map
   non-land-patches       ; an agentset of patches that excludes land patches, to avoid unnecessary calculations happening in land
 
-  ; globals on the interface
+; globals on the interface
+
+
 
 
 ]
@@ -43,7 +43,7 @@ patches-own [
   green.eggs ; green fish eggs, see the description above
   ]
 
-;; Model setup and schedule
+; Model setup and schedule
 
 to startup
   set map-file "map.asc"
@@ -65,15 +65,15 @@ to go
   apply-direct-mortality             ; a fixed percentage of fish die due to several causes (predation, meteorite impact, fishing, pollution, etc.)
   ask fishes [
     grow                              ; die if too old, increase age otherwise (also controls life stage change)
-    pay-maintenance                                                    ; pay maintenance-costs or die!
-    move-or-stay                                                       ; move or stay based on the scan decision
+    pay-maintenance                    ; pay maintenance-costs or die!
+    move-or-stay                     ; move or stay based on the scan decision
   ]
   fish-eat-prey
-  egg-development     ; eggs age advances
-  hatch-eggs          ; eggs that reach full development hatch
-  fish-reproduction  ; fish reproduce
-  regrow-prey        ; prey grows back
-  diffuse worms 0.01      ; prey move to adjacent patches
+  egg-development                     ; eggs age advances
+  hatch-eggs                          ; eggs that reach full development hatch
+  fish-reproduction                   ; fish reproduce
+  regrow-prey                         ; prey grows back
+  diffuse worms 0.01                  ; prey move to adjacent patches
   diffuse bivalves 0.01
   diffuse plankton 0.2
   tick
@@ -122,16 +122,9 @@ end
 
 
 
+; setup the environment
 
-
-to pay-maintenance
-  set energy energy - maintenance-cost
-  if energy <= 0 [die] ; fish die if they can't pay maintenance
-end
-
-;; create the world
-
-to load-map
+to load-map      ;observer procedure
   carefully [
     set the-map gis:load-dataset map-file
     gis:apply-raster the-map pcolor
@@ -160,6 +153,81 @@ to setup-environment      ; observer procedure
   ]
 end
 
+
+; this startup procedure generates an example map and saves the map as a raster file in the model folder. This only happens if the file is not found.
+
+to create-map-file   ; observer procedure
+
+set the-map
+[
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55
+55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55
+55 55 55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 37 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55
+55 55 55 55 55 55 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55
+55 55 55 55 55 55 37 37 37 96 96 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 55 55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55
+55 55 55 55 55 55 37 37 37 37 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55
+55 55 55 55 55 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 55 55 55 55 55 55
+55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 55 55 55 55 55 55
+55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
+55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
+55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
+55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
+55 55 55 55 37 37 37 37 37 37 96 96 96 96 37 37 37 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
+55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
+55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 55 55 55 55
+55 55 37 37 37 96 96 96 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 55 55 55 55
+55 55 37 96 96 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 55 55 55
+55 55 37 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 96 96 96 96 96 37 37 37 37 37 55 55 55
+55 37 37 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 37 37 37 37 37 55 55
+55 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 96 37 37 37 37 55 55
+55 37 37 37 37 37 37 96 37 37 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 96 96 37 37 37 55 55
+55 37 37 37 37 37 37 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 37 96 96 37 37 37 37
+55 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 96 96 96 96 96 37 37 96 37 37 96 37
+37 37 37 37 37 37 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 96 96 96 96 37 37 96 96 37 96 37
+37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 96 96 96 37
+37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
+37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
+37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 37 37 37 37 37
+37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37 37
+37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 96 96 96 96 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 96 96 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 96 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 96
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 37 37 37 96 96 96 37 37 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 37 37 37 96 37 37 37 55 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 55 55 55 55 55 55
+96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 55 55 55 55 55 55 55
+]
+
+ask patches [set pcolor item (pxcor - ((pycor - 49) * 50)) the-map
+  if pcolor = 96 [set habitat "canal"]
+  if pcolor = 37 [set habitat "mudflat"]
+  if pcolor = 55 [set habitat "land"]
+]
+
+gis:set-world-envelope (list min-pxcor max-pxcor min-pycor max-pycor)
+
+set the-map gis:patch-dataset pcolor
+
+gis:store-dataset the-map "map"
+
+user-message "Welcome! The default map has been loaded and saved as a map.asc file in your model folder. This message will only appear again if you delete this file. If you are feeling creative, use the map editor to create maps and save them, but don't forget to give them a different name! Have fun exploring!"
+
+end
+
 ;; FISH-RELATED PROCEDURES
 
 to scale-reserve-size                                                ; reserve size starts at 50% max when age = 0 and increases until 100% at age-at-maturity
@@ -174,6 +242,10 @@ to scale-feeding-rate                                                 ; feeding 
   set feeding-rate feeding-rate - ((0.7 * (1 - (age / age-at-maturity))) * feeding-rate)
 end
 
+to pay-maintenance
+  set energy energy - maintenance-cost
+  if energy <= 0 [die] ; fish die if they can't pay maintenance
+end
 
 to move-to-and-jitter [p] ; moves to a patch and jitters fish coordinates within patch for easier visualization
   let x [pxcor] of p
@@ -192,13 +264,13 @@ to grow
 end
 
 to apply-direct-mortality                                      ; a fixed percentage of fish die due to a series of unfortunate incidents...
-  ask n-of (floor (count fishes * direct-mortality-rate)) fishes [die]
+  ask n-of (floor (count fishes * (direct-mortality-rate / 100))) fishes [die]
 end
 
 
-;; fishes decide whether to stay or move based on the conditions of the current patch
+; fishes decide whether to stay or move based on the conditions of the current patch
 
-to move-or-stay
+to move-or-stay ; fish procedure
 
   ifelse energy < (maintenance-cost + small-movement-cost) [stay] [              ; if really low on energy, just don't move. Else, it depends on who you are and what you need.
 
@@ -262,7 +334,7 @@ end
 
 ; The extremely complex thought process of fish as they pick which prey to eat based on their needs.
 
-to eat                 ; fish procedure
+to eat       ; fish procedure
   ifelse age <= 365 [                                                                   ; if you are a young planktion eater
     if plankton = 0 [stop]                                                              ; if there's no plankton here, I'm not eating today
     let required-amount ceiling ((reserve-size - energy) / (energy-gain-from-plankton)) ; required amount (in grams)
@@ -332,12 +404,12 @@ end
 
 to sort-out-competition ; patch procedure
   foreach sort-on [0 - size] fishes-here [          ; fishes eat in descending order of size (proxy of age)
-   eat
+   ask ? [eat]
   ]
 end
 
 
-; Apt fish reproduce
+; If both sexes of adults ready for reproduction are present, they release gametes to the patch. Incubation is external, so it occurs on the patch, mixing up gametes from several males and females.
 
 to fish-reproduction     ; observer procedure
   ask non-land-patches with [length (remove-duplicates [sex] of fishes-here with [species = "green" and stage = "adult" and energy > reproduction-threshold]) = 2] [  ; patches with both sexes of green adults fit for reproduction
@@ -348,7 +420,7 @@ to fish-reproduction     ; observer procedure
     ]
     let green-female-gametes sum [nr-gametes] of green-reproductive-adults with [sex = "female"]
     let green-male-gametes sum [nr-gametes] of green-reproductive-adults with [sex = "male"]
-    set green.eggs replace-item ((min list green-female-gametes green-male-gametes) * (1 - egg-mortality-green)) green.eggs 0 ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
+    set green.eggs replace-item ((min list green-female-gametes green-male-gametes) * (1 - (egg-mortality-green / 100))) green.eggs 0 ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
     ask green-reproductive-adults [set nr-gametes 0]
   ]
 
@@ -360,7 +432,7 @@ to fish-reproduction     ; observer procedure
     ]
     let red-female-gametes sum [nr-gametes] of red-reproductive-adults with [sex = "female"]
     let red-male-gametes sum [nr-gametes] of red-reproductive-adults with [sex = "male"]
-    set red.eggs replace-item (min list red-female-gametes red-male-gametes * (1 - egg-mortality-red)) red.eggs 0  ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
+    set red.eggs replace-item (min list red-female-gametes red-male-gametes * (1 - (egg-mortality-red / 100))) red.eggs 0  ; the minimum number between female and male gametes is picked as the nr of eggs (two are needed). The other gametes are wasted.
     ask red-reproductive-adults [set nr-gametes 0]
   ]
 
@@ -475,15 +547,7 @@ end
 
 ; PLOTTING AND OUTPUTS
 
-; plot code is in the plots on the interface tap
-
-to-report percent-mudflat
-  report precision ((count patches with [habitat = "mudflat"] / count patches with [habitat != "land"]) * 100) 1
-end
-
-to-report percent-canal
-  report precision ((count patches with [habitat = "canal"] / count patches with [habitat != "land"]) * 100) 1
-end
+; plot and monitor code is in the plots and monitors on the interface tap
 
 
 
@@ -521,83 +585,6 @@ to fill-land
   ask patches with [pcolor = black] [
    set pcolor green
   ]
-end
-
-
-;; MAPS
-
-
-
-to create-map-file         ; this startup procedure generates an example map and saves the map as a raster file in the model folder. This only happens if the file is not found.
-
-set the-map
-[
-55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55
-55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55
-55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55
-55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 96 55 55
-55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55
-55 55 55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 37 96 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55
-55 55 55 55 55 55 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55
-55 55 55 55 55 55 37 37 37 96 96 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 55 55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55
-55 55 55 55 55 55 37 37 37 37 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 55 55 55 55 55 55
-55 55 55 55 55 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 55 55 55 55 55 55
-55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 55 55 55 55 55 55
-55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
-55 55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
-55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 55 55 55 55 55 55
-55 55 55 55 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
-55 55 55 55 37 37 37 37 37 37 96 96 96 96 37 37 37 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
-55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55
-55 55 55 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 55 55 55 55
-55 55 37 37 37 96 96 96 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 55 55 55 55
-55 55 37 96 96 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 55 55 55
-55 55 37 96 96 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 96 96 96 96 96 37 37 37 37 37 55 55 55
-55 37 37 96 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 37 37 37 37 37 55 55
-55 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 96 96 96 96 96 96 96 37 37 37 37 55 55
-55 37 37 37 37 37 37 96 37 37 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 96 96 37 37 37 55 55
-55 37 37 37 37 37 37 96 96 96 96 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 96 96 96 96 37 37 96 96 37 37 37 37
-55 37 37 37 37 37 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 96 96 96 96 96 37 37 96 37 37 96 37
-37 37 37 37 37 37 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 96 96 96 96 37 37 96 96 37 96 37
-37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 96 96 96 37
-37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
-37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 96 96 96 37 37 37 37 37 37 37
-37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 37 37 37 37 37
-37 37 37 37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37 37
-37 37 37 37 37 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 96 96 96 96 96
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 96 96 96 96 96
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 96 96 96
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 96 96
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 96
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 96
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 96 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 37 96 37 37 37 37 37
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 37 37 55 55 55 55 55 55 37 37 37 96 96 96 37 37 55 55 55
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 37 37 37 37 55 55 55 55 55 55 55 55 37 37 37 96 37 37 37 55 55 55 55
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 37 37 55 55 55 55 55 55
-96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 96 37 37 37 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 37 55 55 55 55 55 55 55
-]
-
-ask patches [set pcolor item (pxcor - ((pycor - 49) * 50)) the-map
-  if pcolor = 96 [set habitat "canal"]
-  if pcolor = 37 [set habitat "mudflat"]
-  if pcolor = 55 [set habitat "land"]
-]
-
-gis:set-world-envelope (list min-pxcor max-pxcor min-pycor max-pycor)
-
-set the-map gis:patch-dataset pcolor
-
-gis:store-dataset the-map "map"
-
-user-message "Welcome! The default map has been loaded and saved as a map.asc file in your model folder. This message will only appear again if you delete this file. If you are feeling creative, use the map editor to create maps and save them, but don't forget to give them a different name! Have fun exploring!"
-
 end
 
 
@@ -681,7 +668,7 @@ initial-number-of-fishes
 initial-number-of-fishes
 10
 500
-500
+200
 5
 1
 NIL
@@ -1283,9 +1270,9 @@ map.asc
 String
 
 PLOT
-20
+15
 225
-220
+240
 375
 Fish populations
 Days
@@ -1302,10 +1289,10 @@ PENS
 "Green" 1.0 0 -10899396 true "" "plot count turtles with [species = \"green\"]"
 
 PLOT
-20
-395
-220
-515
+15
+375
+240
+495
 Red age distribution
 Age (years)
 Nr of fish
@@ -1320,10 +1307,10 @@ PENS
 "Red" 1.0 1 -2674135 true "" "histogram [floor (age / 365)] of fishes with [species = \"red\"]"
 
 PLOT
-20
-515
-220
-635
+15
+495
+240
+615
 Green age distribution
 Age (years)
 Nr. of fish
@@ -1480,7 +1467,7 @@ MONITOR
 325
 590
 % mudflat
-percent-mudflat
+precision ((count patches with [habitat = \"mudflat\"] / count patches with [habitat != \"land\"]) * 100) 1
 17
 1
 11
@@ -1491,7 +1478,7 @@ MONITOR
 400
 590
 % canal
-percent-canal
+precision ((count patches with [habitat = \"canal\"] / count patches with [habitat != \"land\"]) * 100) 1
 17
 1
 11
@@ -1540,6 +1527,28 @@ direct-mortality-rate
 1
 %  / day
 HORIZONTAL
+
+MONITOR
+15
+175
+120
+220
+red population
+count fishes with [species = \"red\"]
+17
+1
+11
+
+MONITOR
+120
+175
+240
+220
+Green population
+count fishes with [species = \"green\"]
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
