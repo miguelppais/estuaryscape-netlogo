@@ -57,6 +57,7 @@ to go
   if not any? fishes [
     stop
   ]
+  apply-direct-mortality             ; a fixed percentage of fish die due to several causes (predation, meteorite impact, fishing, pollution, etc.)
   ask fishes [
     grow                              ; die if too old, increase age otherwise (also controls life stage change)
     pay-maintenance                                                    ; pay maintenance-costs or die!
@@ -188,40 +189,69 @@ to grow
   scale-maintenance
 end
 
+to apply-direct-mortality                                      ; a fixed percentage of fish die due to a series of unfortunate incidents...
+  ask n-of (floor (count fishes * direct-mortality-rate)) fishes [die]
+end
+
+
 ;; fishes decide whether to stay or move based on the conditions of the current patch
 
 to move-or-stay
 
-  if (stage = "adult" and energy > reproduction-threshold) [               ; thought process of horny adults
-    ifelse any? fishes-here with [sex != [sex] of myself and species = [species] of myself] [stay] [move]
+  ifelse energy < (maintenance-cost + small-movement-cost) [stay] [              ; if really low on energy, just don't move. Else, it depends on who you are and what you need.
+
+  if (stage = "adult") [
+    ifelse energy > reproduction-threshold [
+    ifelse any? fishes-here with [sex != [sex] of myself and species = [species] of myself] [stay] [move]   ; if ready to reproduce, check for opposite sex and same species, leave if not found
+  ] [
+  scan-prey                                                                     ; if an adult, but not ready to reproduce, scan prey options
+  ]
   ]
 
-  if (stage = "adult" and energy <= reproduction-threshold) [
+  if (age >= 365 and stage = "juvenile") [                                     ; if a juvenile more than 1 year old, scan prey options
     scan-prey
   ]
 
-
-  if (age >= 365 and stage = "juvenile") [
-    scan-prey
+  if (age <= 365) [                                                  ; if a juvenile less that 1 year old, only prey option is plankton
+    let required-energy reserve-size - energy
+    let potentially-available-energy 0
+    ifelse any? other fishes-here with [age <= 365] [
+      set potentially-available-energy energy-gain-from-plankton * ((plankton * weight-per-plankton) - sum [feeding-rate] of other fishes-here with [age <= 365])  ; if there are other young juveniles here, check energy gain from available plankton grams if everyone ate their max.
+      ifelse potentially-available-energy < required-energy [move] [stay]
+      ] [
+      set potentially-available-energy (plankton * plankton-value)                                                               ; if there are not any young juveniles here, just check if there is enough plankton for me
+      ifelse potentially-available-energy < required-energy [move] [stay]
+      ]
   ]
-
-  if (age <= 365) [
-    let required-energy (reserve-size - energy)
   ]
-
 end
+
+; fish evaluate the amount of energy they need and the available energy at the current patch, and wether this energy will be shared with other fish
 
 to scan-prey   ; fish procedure
-  let required-energy ((max-energy-reserve * (age / max-age)) - energy)
+  let required-energy 0
+  let worms-available-energy 0
+  let bivalves-available-energy 0
+  ifelse any? other fishes-here with [age > 365] [
+    set required-energy reserve-size - energy
+    set worms-available-energy energy-gain-from-worms * ((worms * weight-per-worm) - sum [feeding-rate] of other fishes-here with [age > 365])  ; if there are other fish here, check energy gain from available worms grams if everyone ate worms (exclude very young plankton eaters)
+    set bivalves-available-energy energy-gain-from-bivalves * ((bivalves * weight-per-bivalve) - sum [feeding-rate] of other fishes-here with [age > 365])  ; if there are other fish here, check energy gain from available worms grams if everyone ate worms (exclude very young plankton eaters)
+    ifelse (worms-available-energy < required-energy or bivalves-available-energy < required-energy) [move] [stay]
+  ] [
+  set required-energy reserve-size - energy
+  set worms-available-energy (worms * worms-value)                                                               ; if there are not any other fish here, just check if there is enough food for me (exclude young plankton eaters)
+  set bivalves-available-energy (bivalves * bivalves-value)
+  ifelse (worms-available-energy < required-energy or bivalves-available-energy < required-energy) [move] [stay]
+  ]
 
 end
 
-to move          ; fish procedure
+to move          ; fish procedure                         ; fish move to a neighboring patch, spending more energy in locomotion
   set energy energy - large-movement-cost
   move-to-and-jitter one-of neighbors with [habitat != "land"]
 end
 
-to stay          ; fish procedure
+to stay          ; fish procedure                      ; fish just move within the patch, spending less energy
   set energy energy - small-movement-cost
 end
 
@@ -432,7 +462,7 @@ end
 
 
 
-to create-map-file
+to create-map-file         ; this startup procedure generates an example map and saves the map as a raster file in the model folder. This only happens if the file is not found.
 
 set the-map
 [
@@ -500,7 +530,7 @@ set the-map gis:patch-dataset pcolor
 
 gis:store-dataset the-map "map"
 
-user-message "Welcome! The default map has been loaded and saved as a map.asc raster file in your model folder."
+user-message "Welcome! The default map has been loaded and saved as a map.asc file in your model folder. This message will only appear again if you delete this file. If you are feeling creative, use the map editor to create maps and save them, but don't forget to give them a different name! Have fun exploring!"
 
 end
 
@@ -539,14 +569,14 @@ GRAPHICS-WINDOW
 1
 1
 1
-ticks
+Days
 30.0
 
 BUTTON
 15
-15
+40
 78
-60
+85
 NIL
 setup
 NIL
@@ -561,9 +591,9 @@ NIL
 
 BUTTON
 80
-15
+40
 167
-60
+85
 go / pause
 go
 T
@@ -578,9 +608,9 @@ NIL
 
 SLIDER
 15
-70
+95
 240
-103
+128
 initial-number-of-fishes
 initial-number-of-fishes
 10
@@ -795,7 +825,7 @@ assimilation-rate-red
 assimilation-rate-red
 0
 100
-10
+85
 5
 1
 %
@@ -810,7 +840,7 @@ assimilation-rate-green
 assimilation-rate-green
 0
 100
-10
+85
 5
 1
 %
@@ -1089,7 +1119,7 @@ HORIZONTAL
 BUTTON
 1325
 100
-1430
+1435
 133
 Draw canals
 draw-canals
@@ -1106,7 +1136,7 @@ NIL
 BUTTON
 1325
 140
-1432
+1435
 173
 Draw mudflats
 draw-mudflats
@@ -1123,7 +1153,7 @@ NIL
 BUTTON
 1325
 220
-1580
+1650
 253
 Fill black patches with land
 fill-land
@@ -1140,7 +1170,7 @@ NIL
 BUTTON
 1325
 180
-1430
+1435
 213
 ERASER
 erase-map
@@ -1155,9 +1185,9 @@ NIL
 1
 
 BUTTON
-1495
+1500
 60
-1577
+1650
 93
 Save map
 gis:set-world-envelope (list min-pxcor max-pxcor min-pycor max-pycor)\nset the-map gis:patch-dataset pcolor\ngis:store-dataset the-map user-input \"The map will be stored as an .asc file. If the file exists, it will be overwritten. Pick a file name (exclude extension).\"
@@ -1172,10 +1202,10 @@ NIL
 1
 
 BUTTON
-1415
-60
-1497
-93
+1565
+260
+1650
+320
 Load map
 load-map
 NIL
@@ -1191,9 +1221,9 @@ NIL
 BUTTON
 1325
 60
-1417
+1495
 93
-Clean slate
+Clear map
 ask patches [set pcolor black]
 NIL
 1
@@ -1208,7 +1238,7 @@ NIL
 INPUTBOX
 1325
 260
-1580
+1565
 320
 map-file
 map.asc
@@ -1217,10 +1247,10 @@ map.asc
 String
 
 PLOT
-15
-115
-215
-265
+20
+225
+220
+375
 Fish populations
 Days
 Nr of fish
@@ -1236,10 +1266,10 @@ PENS
 "Green" 1.0 0 -10899396 true "" "plot count turtles with [species = \"green\"]"
 
 PLOT
-15
-285
-215
-405
+20
+395
+220
+515
 Red age distribution
 Age (years)
 Nr of fish
@@ -1254,10 +1284,10 @@ PENS
 "Red" 1.0 1 -2674135 true "" "histogram [floor (age / 365)] of fishes with [species = \"red\"]"
 
 PLOT
-15
-405
-215
-525
+20
+515
+220
+635
 Green age distribution
 Age (years)
 Nr. of fish
@@ -1384,18 +1414,18 @@ individual weights
 TEXTBOX
 1325
 35
-1570
+1490
 53
-MAP SELECTION / EDITOR
+MAP LOADER / EDITOR
 14
 15.0
 1
 
 BUTTON
 170
-15
+40
 242
-60
+85
 go once
 go
 NIL
@@ -1429,6 +1459,51 @@ percent-canal
 17
 1
 11
+
+TEXTBOX
+270
+590
+310
+606
+brown
+15
+35.0
+1
+
+TEXTBOX
+350
+590
+385
+606
+blue
+15
+96.0
+1
+
+TEXTBOX
+1445
+110
+1650
+221
+|\n|\n|\n > Pick a tool, draw with the mouse on the |  map. Activate only one at a time!\n|\n|
+11
+0.0
+1
+
+SLIDER
+15
+135
+240
+168
+direct-mortality-rate
+direct-mortality-rate
+0
+50
+5
+1
+1
+%  / day
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
