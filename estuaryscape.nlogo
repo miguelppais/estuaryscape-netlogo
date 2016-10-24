@@ -1,6 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;                  ;;     Created as a final project for the intro to ABM MOOC 2016
-;;ESTUARYSCAPE MODEL;;                     by Complexity Explorer
+;;ESTUARYSCAPE MODEL;;                     by Bill Rand @ Complexity Explorer
 ;;                  ;;
 ;;;;;;;;;;;;;;;;;;;;;;
 
@@ -11,12 +11,7 @@ breed [fishes fish]
 globals[
   the-map
   non-land-patches       ; an agentset of patches that excludes land patches, to avoid unnecessary calculations happening in land
-
-; globals on the interface
-
-
-
-
+  ; other globals are on the interface
 ]
 
 fishes-own [
@@ -27,7 +22,7 @@ fishes-own [
   maintenance-cost        ; energy cost to maintain bodily functions (metabolism,respiration, osmotic regulation, etc)
   age                     ; age (in days)
   stage                   ; juvenile or adult
-  age-at-maturity         ; age at which a fish becomes and adult (able to reproduce)
+  age-at-maturity         ; age at which a fish becomes and adult (able to reproduce) (days)
   max-age                 ; maximum age for fish (instant death lies beyond this point)
   nr-gametes              ; nr of gametes produced by adults
   feeding-rate            ; max amount of prey grams per day
@@ -64,13 +59,12 @@ to go
   if not any? fishes [
     stop
   ]
-  apply-direct-mortality             ; a fixed percentage of fish die due to several causes (predation, meteorite impact, fishing, pollution, etc.)
   ask fishes [
     grow                              ; die if too old, increase age otherwise (also controls life stage change)
     pay-maintenance                    ; pay maintenance-costs or die!
     move-or-stay                     ; move or stay based on the scan decision
   ]
-  fish-eat-prey
+  fish-eat-prey                       ; fish eat prey, larger fish get to eat first
   egg-development                     ; eggs age advances
   hatch-eggs                          ; eggs that reach full development hatch
   fish-reproduction                   ; fish reproduce
@@ -93,7 +87,7 @@ to setup-fishes
     set species "red"
     set age-at-maturity age-at-maturity-red * 365                 ; convert age to days (ticks)
     set max-age max-age-red * 365
-    set feeding-rate feeding-rate-red
+    set feeding-rate max-feeding-rate-red
     set reproduction-threshold reproduction-threshold-red
   ]
 
@@ -101,19 +95,20 @@ to setup-fishes
     set species "green"
     set age-at-maturity age-at-maturity-green * 365                ; convert age to days (ticks)
     set max-age max-age-green * 365
-    set feeding-rate feeding-rate-green
+    set feeding-rate max-feeding-rate-green
     set reproduction-threshold reproduction-threshold-green
   ]
 
   ask fishes [
-    set age random-normal (max-age / 2) ((max-age / 2) * 0.3)     ; distribute ages with the mean as half the life expectancy and a CV of 30%
+    set reserve-size max-energy-reserve
+    set age floor random-normal (max-age / 2) ((max-age / 2) * 0.3)     ; distribute ages with the mean as half the life expectancy and a CV of 30%
     if age < 0 [set age 0]                                        ; correct fish with negative age
     ifelse age >= age-at-maturity [set stage "adult"] [set stage "juvenile"]   ; assign life stages
     set size 0.3 + ((age / max-age) * 0.3)                        ; scale the size according to age
     scale-reserve-size
     scale-maintenance
     scale-feeding-rate
-    set energy reserve-size - (random-float 0.1 * reserve-size)
+    set energy (0.7 * reserve-size) + (random-float 0.3 * reserve-size) ; initial energy varies randomly from 70 to 100% reserve size
 
   ]
 
@@ -142,15 +137,15 @@ to setup-environment      ; observer procedure
     set green.eggs n-values days-until-hatch [0]                    ; eggs are initialized as lists of length "days-until-hatch"
     set red.eggs n-values days-until-hatch [0]
   ]
-  ask non-land-patches with [habitat = "mudflat"] [
-    set worms random max-worms-mudflat
-    set bivalves random max-bivalves-mudflat
-    set plankton random max-plankton-mudflat
+  ask non-land-patches with [habitat = "mudflat"] [                 ; patches are populated with a random number of prey between half and total carrying capacity
+    set worms random-between (floor max-worms-mudflat / 2) max-worms-mudflat
+    set bivalves random-between (floor max-bivalves-mudflat / 2) max-bivalves-mudflat
+    set plankton random-between (floor max-plankton-mudflat / 2) max-plankton-mudflat
   ]
   ask non-land-patches with [habitat = "canal"] [
-    set worms random max-worms-canal
-    set bivalves random max-bivalves-canal
-    set plankton random max-plankton-canal
+    set worms random-between (floor max-worms-canal / 2) max-worms-canal
+    set bivalves random-between (floor max-bivalves-canal / 2) max-bivalves-canal
+    set plankton random-between (floor max-plankton-canal / 2) max-plankton-canal
   ]
 end
 
@@ -225,22 +220,22 @@ set the-map gis:patch-dataset pcolor
 
 gis:store-dataset the-map "map"
 
-user-message "Welcome! The default map has been loaded and saved as a map.asc file in your model folder. This message will only appear again if you delete this file. If you are feeling creative, use the map editor to create maps and save them, but don't forget to give them a different name! Have fun exploring!"
+user-message "Welcome! The specified map file was not found or this is your first time here! The default map has been loaded and saved as a map.asc file in your model folder. This message will only appear again if you delete this file. If you are feeling creative, use the map editor to create maps and save them, but don't forget to give them a different name! Have fun exploring!"
 
 end
 
 ;; FISH-RELATED PROCEDURES
 
-to scale-reserve-size  ; fish procedure                                           ; reserve size starts at 50% max when age = 0 and increases until 100% at age-at-maturity
-  set reserve-size max-energy-reserve - ((0.5 * (1 - (age / age-at-maturity))) * max-energy-reserve)
+to scale-reserve-size  ; fish procedure                                           ; reserve size starts at 10% max when age = 0 and increases until 100% at age-at-maturity
+  set maintenance-cost (0.1 * reserve-size) + ((age / (age-at-maturity)) * (0.9 * reserve-size))
 end
 
-to scale-maintenance ; fish procedure                                                 ; maintenance cost starts at 30% max when age = 0 and increases until 100% at age-at-maturity
-  set maintenance-cost max-maintenance-cost - ((0.7 * (1 - (age / age-at-maturity))) * max-maintenance-cost)
+to scale-maintenance ; fish procedure                                                 ; maintenance cost starts at 10% max when age = 0 and increases until 100% at age-at-maturity
+   set maintenance-cost (0.1 * max-maintenance-cost) + ((age / (age-at-maturity)) * (0.9 * max-maintenance-cost))
 end
 
 to scale-feeding-rate   ; fish procedure                                              ; feeding rate starts at 10% max when age = 0 and increases until 100% at age-at-maturity
-  set feeding-rate feeding-rate - ((0.9 * (1 - (age / age-at-maturity))) * feeding-rate)
+  set feeding-rate (0.1 * feeding-rate) + ((age / (age-at-maturity)) * (0.9 * feeding-rate))
 end
 
 to pay-maintenance ; fish procedure
@@ -255,7 +250,7 @@ to move-to-and-jitter [p] ; fish procedure                                      
 end
 
 
-to grow
+to grow ; fish procedure
   if age >= max-age [die]
   set age age + 1
   if age = age-at-maturity [set stage "adult"]                 ; puberty...
@@ -263,11 +258,6 @@ to grow
   scale-reserve-size
   scale-maintenance
 end
-
-to apply-direct-mortality                                      ; a fixed percentage of fish die due to a series of unfortunate incidents...
-  ask n-of (floor (count fishes * (direct-mortality-rate / 100))) fishes [die]
-end
-
 
 ; fishes decide whether to stay or move based on the conditions of the current patch
 
@@ -283,15 +273,15 @@ to move-or-stay ; fish procedure
   ]
   ]
 
-  if (age >= 365 and stage = "juvenile") [                                     ; if a juvenile more than 1 year old, scan prey options
+  if (age > plankton-eating-period and stage = "juvenile") [                                     ; if a juvenile has left plankton eating period, scan prey options
     scan-prey
   ]
 
-  if (age <= 365) [                                                  ; if a juvenile less that 1 year old, only prey option is plankton
+  if (age <= plankton-eating-period) [                                                  ; if in the plankton eating period
     let required-energy reserve-size - energy
     let potentially-available-energy 0
-    ifelse any? other fishes-here with [age <= 365] [
-      set potentially-available-energy energy-gain-from-plankton * ((plankton * weight-per-plankton) - sum [feeding-rate] of other fishes-here with [age <= 365])  ; if there are other young juveniles here, check energy gain from available plankton grams if everyone ate their max.
+    ifelse any? other fishes-here with [age <= plankton-eating-period] [
+      set potentially-available-energy energy-gain-from-plankton * ((plankton * weight-per-plankton) - sum [feeding-rate] of other fishes-here with [age <= plankton-eating-period])  ; if there are other young juveniles here, check energy gain from available plankton grams if everyone ate their max.
       ifelse potentially-available-energy < required-energy [move] [stay]
       ] [
       set potentially-available-energy (plankton * plankton-value)                                                               ; if there are not any young juveniles here, just check if there is enough plankton for me
@@ -301,18 +291,16 @@ to move-or-stay ; fish procedure
   ]
 end
 
-; fish evaluate the amount of energy they need and the available energy at the current patch, and wether this energy will be shared with other fish
-
-; TO DO : CONSIDER CHECKING ONLY FOR FISH BIGGER THAN MYSELF
+; fish evaluate the amount of energy they need and the available energy at the current patch, and wether larger fish will likely eat everything
 
 to scan-prey   ; fish procedure
   let required-energy 0
   let worms-available-energy 0
   let bivalves-available-energy 0
-  ifelse any? other fishes-here with [age > 365] [
+  ifelse any? other fishes-here with [age > plankton-eating-period and size >= [size] of myself] [
     set required-energy reserve-size - energy
-    set worms-available-energy energy-gain-from-worms * ((worms * weight-per-worm) - sum [feeding-rate] of other fishes-here with [age > 365])  ; if there are other fish here, check energy gain from available worms grams if everyone ate worms (exclude very young plankton eaters)
-    set bivalves-available-energy energy-gain-from-bivalves * ((bivalves * weight-per-bivalve) - sum [feeding-rate] of other fishes-here with [age > 365])  ; if there are other fish here, check energy gain from available worms grams if everyone ate worms (exclude very young plankton eaters)
+    set worms-available-energy energy-gain-from-worms * ((worms * weight-per-worm) - sum [feeding-rate] of other fishes-here with [age > plankton-eating-period and size >= [size] of myself])  ; if there are other larger fish here, check energy gain from available worms grams if everyone ate worms (exclude very young plankton eaters)
+    set bivalves-available-energy energy-gain-from-bivalves * ((bivalves * weight-per-bivalve) - sum [feeding-rate] of other fishes-here with [age > plankton-eating-period and size >= [size] of myself])  ; if there are other fish here, check energy gain from available worms grams if everyone ate worms (exclude very young plankton eaters)
     ifelse (worms-available-energy < required-energy or bivalves-available-energy < required-energy) [move] [stay]
   ] [
   set required-energy reserve-size - energy
@@ -336,7 +324,7 @@ end
 ; The extremely complex thought process of fish as they pick which prey to eat based on their needs.
 
 to eat       ; fish procedure
-  ifelse age <= 365 [                                                                   ; if you are a young planktion eater
+  ifelse age <= plankton-eating-period [                                                                   ; if you are a young planktion eater
     if plankton = 0 [stop]                                                              ; if there's no plankton here, I'm not eating today
     let required-amount ceiling ((reserve-size - energy) / (energy-gain-from-plankton)) ; required amount (in grams)
     if required-amount > feeding-rate [set required-amount feeding-rate]                ; required amount is limited by feeding rate
@@ -456,18 +444,20 @@ to egg-development             ; observer procedure
   ]
 end
 
+; eggs that have reached "days-until-hatch" are sent to a random number of mudflat patches between half the total area and the total mudflat area
 
 to hatch-eggs                  ; observer procedure
+  let mudflat-patches non-land-patches with [habitat = "mudflat"]
   ask non-land-patches with [last green.eggs > 0] [          ; hatch green eggs
   let nr-green-eggs last green.eggs
   set green.eggs replace-item (days-until-hatch - 1) green.eggs 0       ;eggs hatched, so they are removed from the patch variable
   let number-patches 0
-  ifelse nr-green-eggs > count non-land-patches / 2 [
-    set number-patches random-between (floor count non-land-patches / 4) (floor count non-land-patches / 2)
+  ifelse nr-green-eggs > count mudflat-patches [
+    set number-patches random-between (floor count mudflat-patches / 2) (floor count mudflat-patches)
     ] [
-    set number-patches random-between 1 nr-green-eggs
+    set number-patches random-between 1 nr-green-eggs             ; if small amount of eggs, max patches is nr of eggs (1 egg per patch)
     ]
-  ask n-of number-patches non-land-patches [
+  ask n-of number-patches mudflat-patches [
     set green-newcomers green-newcomers + nr-green-eggs / number-patches
     ]
   ]
@@ -475,84 +465,96 @@ to hatch-eggs                  ; observer procedure
   let nr-red-eggs last red.eggs
   set red.eggs replace-item (days-until-hatch - 1) red.eggs 0       ;eggs hatched, so they are removed from the patch variable
   let number-patches 0
-  ifelse nr-red-eggs > count non-land-patches / 2 [
-    set number-patches random-between (floor count non-land-patches / 4) (floor count non-land-patches / 2)
+  ifelse nr-red-eggs > count mudflat-patches [
+    set number-patches random-between (floor count mudflat-patches / 2) (floor count mudflat-patches)
     ] [
     set number-patches random-between 1 nr-red-eggs
     ]
-  ask n-of number-patches non-land-patches [
+  ask n-of number-patches mudflat-patches [
     set red-newcomers red-newcomers + nr-red-eggs / number-patches
     ]
   ]
 
-  ask non-land-patches with [green-newcomers > 0 and red-newcomers > 0] [
-    let carrying-capacity floor (plankton * weight-per-plankton) / (feeding-rate-green * 0.1)
-    let settled-greens min list (floor (carrying-capacity / 4)) green-newcomers
+  ask mudflat-patches with [green-newcomers > 0 and red-newcomers > 0] [    ; patches with both species trying to settle. Each species scans 1/4 of the carrying capacity
+    let carrying-capacity floor (plankton * weight-per-plankton) / (max-feeding-rate-green * 0.1)  ; 10% feeding rate at age 0
+    let settled-greens min list (floor (carrying-capacity / 4)) green-newcomers   ; number of settlers limited by carrying capacity
     let settled-reds min list (floor (carrying-capacity / 4)) red-newcomers
     settle-greens settled-greens
     settle-reds settled-reds
+    set red-newcomers 0
+    set green-newcomers 0
   ]
 
-  ask non-land-patches with [green-newcomers = 0 and red-newcomers > 0] [
-    let carrying-capacity (plankton * weight-per-plankton) / (feeding-rate-green * 0.1)
-    let settled-reds min list (carrying-capacity / 2) green-newcomers
+  ask mudflat-patches with [green-newcomers = 0 and red-newcomers > 0] [  ; patches with only red settlers, scan 1/2 of the carrying capacity
+    let carrying-capacity (plankton * weight-per-plankton) / (max-feeding-rate-red * 0.1)
+    let settled-reds min list (carrying-capacity / 2) red-newcomers
     settle-reds settled-reds
+    set red-newcomers 0
   ]
 
-  ask non-land-patches with [green-newcomers > 0 and red-newcomers = 0] [
-    let carrying-capacity (plankton * weight-per-plankton) / (feeding-rate-green * 0.1)
+  ask mudflat-patches with [green-newcomers > 0 and red-newcomers = 0] [   ; patches with only green settlers, scan 1/2 of the carrying capacity
+    let carrying-capacity (plankton * weight-per-plankton) / (max-feeding-rate-green * 0.1)
     let settled-greens min list (carrying-capacity / 2) green-newcomers
     settle-greens settled-greens
+    set green-newcomers 0
   ]
 
 end
 
 to settle-reds [nr] ; patch procedure
   sprout-fishes nr [
+    set reserve-size max-energy-reserve
     set sex one-of ["male" "female"]
     set shape "fish"
     set species "red"
+    set color red
     set age 0
     set size 0.3
     set age-at-maturity age-at-maturity-red * 365                ; convert age to days (ticks)
     set max-age max-age-red * 365
-    set feeding-rate feeding-rate-red
+    set feeding-rate max-feeding-rate-red
     set reproduction-threshold reproduction-threshold-red
     scale-reserve-size
     scale-maintenance
     scale-feeding-rate
-    set energy reserve-size - (random-float 0.1 * reserve-size)
-    move-to-and-jitter one-of non-land-patches    ; fish juveniles settle at a random non-land location
+    set energy (0.7 * reserve-size) + (random-float 0.3 * reserve-size) ; initial energy varies randomly from 70 to 100% reserve size
+    move-to-and-jitter patch-here ; jitter in the current patch
   ]
 end
 
 to settle-greens [nr]   ; patch procedure
   sprout-fishes nr [
+    set reserve-size max-energy-reserve
     set sex one-of ["male" "female"]
     set shape "fish"
     set species "green"
+    set color green
     set age 0
     set size 0.3
     set age-at-maturity age-at-maturity-green * 365                ; convert age to days (ticks)
     set max-age max-age-green * 365
-    set feeding-rate feeding-rate-green
+    set feeding-rate max-feeding-rate-green
     set reproduction-threshold reproduction-threshold-green
     scale-reserve-size
     scale-maintenance
     scale-feeding-rate
-    set energy reserve-size - (random-float 0.1 * reserve-size)
+    set energy (0.7 * reserve-size) + (random-float 0.3 * reserve-size) ; initial energy varies randomly from 70 to 100% reserve size
+    move-to-and-jitter patch-here   ; jitter in the current patch
     ]
 end
 
 to regrow-prey              ; obsever procedure
   ask non-land-patches [
+    if worms < 0 [set worms 0]
+    if bivalves < 0 [set bivalves 0]
+    if plankton < 0 [set plankton 0]
     set worms worms + worms-regrowth-rate
     set bivalves bivalves + bivalves-regrowth-rate
     set plankton plankton + plankton-regrowth-rate
 
     ; limit the amount of prey to the carrying capacity of the habitat
 
-    if habitat = "muflat" [
+    if habitat = "mudflat" [
       if worms > max-worms-mudflat [set worms max-worms-mudflat]
       if bivalves > max-bivalves-mudflat [set bivalves max-bivalves-mudflat]
       if plankton > max-plankton-mudflat [set plankton max-plankton-mudflat]
@@ -568,30 +570,40 @@ end
 ;; PREY REPORTERS
 
 to-report worms-value
-report energy-gain-from-worms * weight-per-worm
+report precision (energy-gain-from-worms * weight-per-worm) 3
 end
 
 to-report bivalves-value
-report energy-gain-from-bivalves * weight-per-bivalve
+report precision (energy-gain-from-bivalves * weight-per-bivalve) 3
 end
 
 to-report plankton-value
-report energy-gain-from-plankton * weight-per-plankton
+report precision (energy-gain-from-plankton * weight-per-plankton) 3
 end
 
+; FISH REPORTERS (these were not fully implemented, but are based on real data from Solea solea and can be used to estimate parameters.)
 
-;; recolor the worms to indicate how much has been eaten
-to recolor-patches   ; alternative visualization to look at prey abundances?  TO DO
-
+to-report get-length [t]
+  report 38 * (1 - exp(-0.43 * ((t / 365) + 0.1))) ; cm, t in days
 end
+
+to-report get-weight [L]      ; g, L in cm
+  report 0.0062 * (L ^ 3.13)
+end
+
+to-report get-feeding-rate [t]  ; g / day, t in days
+  let L get-length t
+  let w get-weight L
+  report 0.092 * w
+end
+
 
 ; PLOTTING AND OUTPUTS
 
 ; plot and monitor code is in the plots and monitors on the interface tap
 
 
-
-;; MAP EDITOR
+; MAP EDITOR
 
 to draw-canals
   if mouse-down?     ;; reports true or false to indicate whether mouse button is down
@@ -667,9 +679,9 @@ Days
 
 BUTTON
 15
-40
+10
 78
-85
+55
 NIL
 setup
 NIL
@@ -684,9 +696,9 @@ NIL
 
 BUTTON
 80
-40
+10
 167
-85
+55
 go / pause
 go
 T
@@ -701,14 +713,14 @@ NIL
 
 SLIDER
 15
-95
+180
 240
-128
+213
 initial-number-of-fishes
 initial-number-of-fishes
 10
 500
-300
+150
 5
 1
 NIL
@@ -716,234 +728,234 @@ HORIZONTAL
 
 SLIDER
 245
-705
-535
-738
-worms-regrowth-rate
-worms-regrowth-rate
-0
-100
-20
-1
-1
-/ day
-HORIZONTAL
-
-SLIDER
-20
-705
-245
-738
-energy-gain-from-worms
-energy-gain-from-worms
-0
-30
-17
-0.5
-1
-per g
-HORIZONTAL
-
-SLIDER
-1050
-430
-1222
-463
-large-movement-cost
-large-movement-cost
-0
-100
-30
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-245
-750
-535
-783
-bivalves-regrowth-rate
-bivalves-regrowth-rate
-0
-100
-20
-1
-1
-/ day
-HORIZONTAL
-
-SLIDER
-245
-795
-535
-828
-plankton-regrowth-rate
-plankton-regrowth-rate
-0
-20000
-7000
-100
-1
-/ day
-HORIZONTAL
-
-SLIDER
-20
-750
-245
-783
-energy-gain-from-bivalves
-energy-gain-from-bivalves
-0
-30
-10
-0.5
-1
-per g
-HORIZONTAL
-
-SLIDER
-20
-795
-245
-828
-energy-gain-from-plankton
-energy-gain-from-plankton
-0
-100
-50
-1
-1
-per g
-HORIZONTAL
-
-SLIDER
-795
-60
-987
-93
-age-at-maturity-red
-age-at-maturity-red
-1
-30
-10
-1
-1
-years
-HORIZONTAL
-
-SLIDER
-1040
-60
-1242
-93
-age-at-maturity-green
-age-at-maturity-green
-1
-30
-10
-1
-1
-years
-HORIZONTAL
-
-SLIDER
-795
-110
-967
-143
-max-age-red
-max-age-red
-1
-30
-15
-1
-1
-years
-HORIZONTAL
-
-SLIDER
-1040
-110
-1212
-143
-max-age-green
-max-age-green
-1
-30
-15
-1
-1
-years
-HORIZONTAL
-
-SLIDER
-795
-165
-992
-198
-feeding-rate-red
-feeding-rate-red
-0
-100
-50
-1
-1
-g per day
-HORIZONTAL
-
-SLIDER
-1040
-165
-1252
-198
-feeding-rate-green
-feeding-rate-green
-0
-100
-50
-1
-1
-g per day
-HORIZONTAL
-
-SLIDER
-1050
-465
-1222
-498
-max-maintenance-cost
-max-maintenance-cost
-0
-100
-20
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1050
-395
-1222
-428
-small-movement-cost
-small-movement-cost
-0
-100
-15
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
 790
-215
-987
-248
+535
+823
+worms-regrowth-rate
+worms-regrowth-rate
+0
+1000
+200
+10
+1
+/ day
+HORIZONTAL
+
+SLIDER
+20
+790
+245
+823
+energy-gain-from-worms
+energy-gain-from-worms
+0
+100
+7
+1
+1
+per g
+HORIZONTAL
+
+SLIDER
+1190
+795
+1380
+828
+large-movement-cost
+large-movement-cost
+0
+100
+100
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+245
+835
+535
+868
+bivalves-regrowth-rate
+bivalves-regrowth-rate
+0
+1000
+200
+10
+1
+/ day
+HORIZONTAL
+
+SLIDER
+245
+880
+535
+913
+plankton-regrowth-rate
+plankton-regrowth-rate
+0
+20000
+5500
+100
+1
+/ day
+HORIZONTAL
+
+SLIDER
+20
+835
+245
+868
+energy-gain-from-bivalves
+energy-gain-from-bivalves
+0
+100
+10
+1
+1
+per g
+HORIZONTAL
+
+SLIDER
+20
+880
+245
+913
+energy-gain-from-plankton
+energy-gain-from-plankton
+0
+100
+6
+1
+1
+per g
+HORIZONTAL
+
+SLIDER
+1085
+90
+1275
+123
+age-at-maturity-red
+age-at-maturity-red
+1
+10
+2
+1
+1
+years
+HORIZONTAL
+
+SLIDER
+1290
+90
+1480
+123
+age-at-maturity-green
+age-at-maturity-green
+1
+10
+2
+1
+1
+years
+HORIZONTAL
+
+SLIDER
+1085
+125
+1275
+158
+max-age-red
+max-age-red
+1
+10
+4
+1
+1
+years
+HORIZONTAL
+
+SLIDER
+1290
+125
+1480
+158
+max-age-green
+max-age-green
+1
+10
+4
+1
+1
+years
+HORIZONTAL
+
+SLIDER
+1085
+160
+1275
+193
+max-feeding-rate-red
+max-feeding-rate-red
+1
+50
+35
+1
+1
+g/day
+HORIZONTAL
+
+SLIDER
+1290
+160
+1480
+193
+max-feeding-rate-green
+max-feeding-rate-green
+1
+50
+35
+1
+1
+g/day
+HORIZONTAL
+
+SLIDER
+1190
+725
+1380
+758
+max-maintenance-cost
+max-maintenance-cost
+0
+100
+50
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+1190
+760
+1380
+793
+small-movement-cost
+small-movement-cost
+0
+100
+25
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+1085
+195
+1275
+228
 reproduction-threshold-red
 reproduction-threshold-red
 0
@@ -955,10 +967,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-1040
-215
-1252
-248
+1290
+195
+1480
+228
 reproduction-threshold-green
 reproduction-threshold-green
 0
@@ -970,25 +982,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-800
-305
-975
-338
+1190
+830
+1380
+863
 cost-per-gamete
 cost-per-gamete
 0.01
 1
-0.6
+0.4
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-800
-340
-975
-373
+1190
+865
+1380
+898
 days-until-hatch
 days-until-hatch
 1
@@ -1000,10 +1012,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-795
-255
-967
-288
+1085
+230
+1275
+263
 egg-mortality-red
 egg-mortality-red
 0
@@ -1015,10 +1027,10 @@ egg-mortality-red
 HORIZONTAL
 
 SLIDER
-1045
-255
-1222
-288
+1290
+230
+1480
+263
 egg-mortality-green
 egg-mortality-green
 0
@@ -1030,10 +1042,10 @@ egg-mortality-green
 HORIZONTAL
 
 SLIDER
-1050
-310
-1222
-343
+1190
+690
+1380
+723
 max-energy-reserve
 max-energy-reserve
 10
@@ -1046,14 +1058,14 @@ HORIZONTAL
 
 SLIDER
 535
-705
+790
 720
-738
+823
 weight-per-worm
 weight-per-worm
 0.01
-0.3
-0.08
+1
+0.4
 0.01
 1
 g
@@ -1061,14 +1073,14 @@ HORIZONTAL
 
 SLIDER
 535
-750
+835
 720
-783
+868
 weight-per-bivalve
 weight-per-bivalve
 0.01
+1
 0.5
-0.15
 0.01
 1
 g
@@ -1076,114 +1088,114 @@ HORIZONTAL
 
 SLIDER
 535
-795
+880
 720
-828
+913
 weight-per-plankton
 weight-per-plankton
-0.00001
-0.0001
-4.0E-5
-0.00001
+0.001
+0.01
+0.01
+0.001
 1
 g
 HORIZONTAL
 
 SLIDER
-817
-705
-989
-738
+812
+790
+984
+823
 max-worms-mudflat
 max-worms-mudflat
 0
 500
-500
+100
 10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-817
-750
-989
-783
+812
+835
+984
+868
 max-bivalves-mudflat
 max-bivalves-mudflat
 0
 500
-190
+50
 10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-817
-795
-989
-828
+812
+880
+984
+913
 max-plankton-mudflat
 max-plankton-mudflat
 0
-20000
-13500
+10000
+6600
 100
 1
 NIL
 HORIZONTAL
 
 SLIDER
-987
-705
-1159
-738
+982
+790
+1154
+823
 max-worms-canal
 max-worms-canal
 0
 500
-60
+50
 10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-987
-750
-1159
-783
+982
+835
+1154
+868
 max-bivalves-canal
 max-bivalves-canal
 0
 500
-350
+200
 10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-987
-795
-1159
-828
+982
+880
+1154
+913
 max-plankton-canal
 max-plankton-canal
 0
-20000
-13500
+10000
+6600
 100
 1
 NIL
 HORIZONTAL
 
 BUTTON
-1325
-100
-1435
-133
+405
+645
+525
+678
 Draw canals
 draw-canals
 T
@@ -1197,10 +1209,10 @@ NIL
 1
 
 BUTTON
-1325
-140
-1435
-173
+525
+645
+645
+678
 Draw mudflats
 draw-mudflats
 T
@@ -1214,10 +1226,10 @@ NIL
 1
 
 BUTTON
-1325
-220
-1650
-253
+405
+695
+765
+728
 Fill black patches with land
 fill-land
 NIL
@@ -1231,10 +1243,10 @@ NIL
 1
 
 BUTTON
-1325
-180
-1435
-213
+645
+645
+765
+678
 ERASER
 erase-map
 T
@@ -1248,10 +1260,10 @@ NIL
 1
 
 BUTTON
-1500
-60
-1650
-93
+585
+610
+765
+643
 Save map
 gis:set-world-envelope (list min-pxcor max-pxcor min-pycor max-pycor)\nset the-map gis:patch-dataset pcolor\ngis:store-dataset the-map user-input \"The map will be stored as an .asc file. If the file exists, it will be overwritten. Pick a file name (exclude extension).\"
 NIL
@@ -1265,27 +1277,10 @@ NIL
 1
 
 BUTTON
-1565
-260
-1650
-320
-Load map
-setup
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-1325
-60
-1495
-93
+405
+610
+585
+643
 Clear map
 ask patches [set pcolor black]
 NIL
@@ -1299,10 +1294,10 @@ NIL
 1
 
 INPUTBOX
-1325
-260
-1565
-320
+15
+110
+240
+170
 map-file
 map.asc
 1
@@ -1311,9 +1306,9 @@ String
 
 PLOT
 15
-225
+270
 240
-375
+420
 Fish populations
 Days
 Nr of fish
@@ -1330,32 +1325,32 @@ PENS
 
 PLOT
 15
-375
+420
 240
-495
+540
 Red age distribution
 Age (years)
 Nr of fish
 0.0
-30.0
+10.0
 0.0
 10.0
 true
 false
 "" ""
 PENS
-"Red" 1.0 1 -2674135 true "" "histogram [floor (age / 365)] of fishes with [species = \"red\"]"
+"Red" 1.0 1 -2674135 true "" "histogram [floor (age / 365)] of fishes with [species = \"red\" and age > 365]"
 
 PLOT
 15
-495
+540
 240
-615
+660
 Green age distribution
 Age (years)
 Nr. of fish
 0.0
-30.0
+10.0
 0.0
 10.0
 true
@@ -1365,12 +1360,12 @@ PENS
 "Green" 1.0 1 -10899396 true "" "histogram [floor (age / 365)] of fishes with [species = \"green\"]"
 
 BUTTON
-1070
-20
-1167
-53
+1290
+55
+1480
+88
 Same as red
-set age-at-maturity-green age-at-maturity-red\nset max-age-green max-age-red\nset feeding-rate-green feeding-rate-red\nset reproduction-threshold-green reproduction-threshold-red\nset egg-mortality-green egg-mortality-red
+set age-at-maturity-green age-at-maturity-red\nset max-age-green max-age-red\nset max-feeding-rate-green max-feeding-rate-red\nset reproduction-threshold-green reproduction-threshold-red\nset egg-mortality-green egg-mortality-red
 NIL
 1
 T
@@ -1383,9 +1378,9 @@ NIL
 
 MONITOR
 720
-705
+790
 815
-750
+835
 worms value
 worms-value
 2
@@ -1394,9 +1389,9 @@ worms-value
 
 MONITOR
 720
-750
+835
 815
-795
+880
 bivalves value
 bivalves-value
 17
@@ -1405,9 +1400,9 @@ bivalves-value
 
 MONITOR
 720
-795
+880
 815
-840
+925
 plankton value
 plankton-value
 17
@@ -1416,19 +1411,19 @@ plankton-value
 
 TEXTBOX
 717
-685
+770
 827
-703
+788
 Energy per prey item
 11
 0.0
 1
 
 TEXTBOX
-937
-685
-1087
-703
+932
+770
+1082
+788
 CARRYING CAPACITY
 11
 0.0
@@ -1436,9 +1431,9 @@ CARRYING CAPACITY
 
 TEXTBOX
 30
-660
+745
 180
-678
+763
 PREY PARAMETERS
 13
 95.0
@@ -1446,9 +1441,9 @@ PREY PARAMETERS
 
 TEXTBOX
 25
-685
+770
 175
-703
+788
 Energy gains
 11
 0.0
@@ -1456,9 +1451,9 @@ Energy gains
 
 TEXTBOX
 250
-685
+770
 400
-703
+788
 population growth rates
 11
 0.0
@@ -1466,29 +1461,29 @@ population growth rates
 
 TEXTBOX
 542
-685
+770
 692
-703
+788
 individual weights
 11
 0.0
 1
 
 TEXTBOX
-1325
-35
-1490
-53
-MAP LOADER / EDITOR
+315
+650
+395
+668
+MAP EDITOR
 14
 15.0
 1
 
 BUTTON
 170
-40
+10
 242
-85
+55
 go once
 go
 NIL
@@ -1544,35 +1539,20 @@ blue
 1
 
 TEXTBOX
-1445
-110
-1650
-221
-|\n|\n|\n > Pick a tool, draw with the mouse on the |  map. Activate only one at a time!\n|\n|
+410
+680
+765
+700
+Pick a tool, draw with the mouse on the map. Activate only one at a time!
 11
 0.0
 1
 
-SLIDER
-15
-135
-240
-168
-direct-mortality-rate
-direct-mortality-rate
-0
-50
-5
-1
-1
-%  / day
-HORIZONTAL
-
 MONITOR
 15
-175
-120
 220
+120
+265
 red population
 count fishes with [species = \"red\"]
 17
@@ -1581,9 +1561,9 @@ count fishes with [species = \"red\"]
 
 MONITOR
 120
-175
-240
 220
+240
+265
 Green population
 count fishes with [species = \"green\"]
 17
@@ -1591,34 +1571,34 @@ count fishes with [species = \"green\"]
 11
 
 MONITOR
-825
-400
-965
-445
-max egg production red
+1085
+275
+1275
+320
+Max egg production
 floor ((1 - (egg-mortality-red / 100)) * (max-energy-reserve - reproduction-threshold-red) / cost-per-gamete)
 17
 1
 11
 
 MONITOR
-825
-445
-965
-490
-max egg production green
+1290
+275
+1480
+320
+Max egg production
 floor ((1 - (egg-mortality-green / 100)) * (max-energy-reserve - reproduction-threshold-green) / cost-per-gamete)
 17
 1
 11
 
 BUTTON
-465
-575
-582
-608
+525
+545
+645
+578
 display plankton
-ask non-land-patches [\nset pcolor scale-color pcolor plankton 0 50\n]\ndisplay
+ask patches with [habitat = \"mudflat\"] [\nset pcolor scale-color 37 plankton 0 (max list max-plankton-mudflat max-plankton-canal)\n]\nask patches with [habitat = \"canal\"] [\nset pcolor scale-color 96 plankton 0 (max list max-plankton-mudflat max-plankton-canal)\n]\ndisplay
 T
 1
 T
@@ -1629,72 +1609,533 @@ NIL
 NIL
 1
 
-SLIDER
-1160
-705
-1332
-738
-worms-diffuse-rate
-worms-diffuse-rate
-0
+BUTTON
+405
+545
+525
+578
+display worms
+ask patches with [habitat = \"mudflat\"] [\nset pcolor scale-color 37 worms (max list max-worms-mudflat max-worms-canal) 0\n]\nask patches with [habitat = \"canal\"] [\nset pcolor scale-color 96 worms (max list max-worms-mudflat max-worms-canal) 0\n]\ndisplay
+T
 1
-0.1
-0.01
-1
+T
+OBSERVER
 NIL
-HORIZONTAL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+645
+545
+765
+578
+display bivalves
+ask patches with [habitat = \"mudflat\"] [\nset pcolor scale-color 37 bivalves 0 (max list max-bivalves-mudflat max-bivalves-canal)\n]\nask patches with [habitat = \"canal\"] [\nset pcolor scale-color 96 bivalves 0 (max list max-bivalves-mudflat max-bivalves-canal)\n]\ndisplay
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+TEXTBOX
+415
+580
+530
+598
+Darker = more prey\n
+11
+0.0
+1
+
+TEXTBOX
+1190
+10
+1370
+28
+FISH SPECIES PARAMETERS
+14
+0.0
+1
+
+TEXTBOX
+1165
+35
+1200
+53
+RED
+15
+15.0
+1
+
+TEXTBOX
+1360
+35
+1420
+53
+GREEN
+15
+55.0
+1
+
+TEXTBOX
+1250
+670
+1345
+688
+COMMON
+15
+0.0
+1
+
+MONITOR
+1085
+320
+1275
+365
+Max worms / day
+floor (max-feeding-rate-red / weight-per-worm)
+17
+1
+11
+
+MONITOR
+1290
+320
+1480
+365
+Max worms / day
+floor (max-feeding-rate-green / weight-per-worm)
+17
+1
+11
+
+MONITOR
+1085
+365
+1275
+410
+Max bivalves / day
+floor (max-feeding-rate-red / weight-per-bivalve)
+17
+1
+11
+
+MONITOR
+1290
+365
+1480
+410
+Max bivalves / day
+floor (max-feeding-rate-green / weight-per-bivalve)
+17
+1
+11
+
+MONITOR
+1085
+410
+1275
+455
+Max plankton / day
+floor (((0.1 * max-feeding-rate-red) + ((365 / (age-at-maturity-red * 365)) * (0.9 * max-feeding-rate-red))) / weight-per-plankton)
+17
+1
+11
+
+MONITOR
+1290
+410
+1480
+455
+Max plankton / day
+floor (((0.1 * max-feeding-rate-green) + ((365 / (age-at-maturity-green * 365)) * (0.9 * max-feeding-rate-green))) / weight-per-plankton)
+17
+1
+11
+
+TEXTBOX
+1485
+415
+1565
+445
+for a 1 year old larvae
+11
+0.0
+1
+
+TEXTBOX
+525
+580
+695
+616
+SWITCH ONLY ONE AT A TIME!!\nEPILEPSY WARNING!!!
+11
+15.0
+1
+
+MONITOR
+1085
+595
+1275
+640
+Feeding rate at age 1
+(0.1 * max-feeding-rate-red) + ((365 / (age-at-maturity-red * 365)) * (0.9 * max-feeding-rate-red))
+17
+1
+11
+
+MONITOR
+1290
+595
+1480
+640
+Feeding rate at age 1
+(0.1 * max-feeding-rate-green) + ((365 / (age-at-maturity-green * 365)) * (0.9 * max-feeding-rate-green))
+17
+1
+11
+
+MONITOR
+1085
+455
+1275
+500
+Max energy from worms
+floor (max-feeding-rate-red / weight-per-worm) * worms-value
+17
+1
+11
+
+MONITOR
+1290
+455
+1480
+500
+Max energy from worms
+floor (max-feeding-rate-green / weight-per-worm) * worms-value
+17
+1
+11
+
+MONITOR
+1085
+500
+1275
+545
+Max energy from bivalves
+floor (max-feeding-rate-red / weight-per-bivalve) * bivalves-value
+17
+1
+11
+
+MONITOR
+1290
+500
+1480
+545
+Max energy from bivalves
+floor (max-feeding-rate-green / weight-per-bivalve) * bivalves-value
+17
+1
+11
+
+MONITOR
+1085
+545
+1275
+590
+Max energy from plankton
+ceiling (((0.1 * max-feeding-rate-red) + ((365 / (age-at-maturity-red * 365)) * (0.9 * max-feeding-rate-red))) / weight-per-plankton) * plankton-value
+17
+1
+11
+
+MONITOR
+1290
+545
+1480
+590
+Max energy from plankton
+ceiling (((0.1 * max-feeding-rate-green) + ((365 / (age-at-maturity-green * 365)) * (0.9 * max-feeding-rate-green))) / weight-per-plankton) * plankton-value
+17
+1
+11
+
+BUTTON
+1085
+55
+1275
+88
+Same as green
+set age-at-maturity-red age-at-maturity-green\nset max-age-red max-age-green\nset max-feeding-rate-red max-feeding-rate-green\nset reproduction-threshold-red reproduction-threshold-green\nset egg-mortality-red egg-mortality-green
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+TEXTBOX
+1485
+550
+1565
+580
+for a 1 year old larvae
+11
+0.0
+1
+
+TEXTBOX
+1485
+210
+1530
+228
+energy
+11
+0.0
+1
+
+PLOT
+775
+40
+1070
+220
+Worms
+days
+Avg. nr worms
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"mudflats" 1.0 0 -3889007 true "" "plot (mean [worms] of non-land-patches with [habitat = \"mudflat\"])"
+"canals" 1.0 0 -11033397 true "" "plot (mean [worms] of non-land-patches with [habitat = \"canal\"])"
+
+PLOT
+775
+220
+1070
+400
+Bivalves
+days
+Avg. nr bivalves
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"mudflats" 1.0 0 -3889007 true "" "plot (mean [bivalves] of non-land-patches with [habitat = \"mudflat\"])"
+"canals" 1.0 0 -11033397 true "" "plot (mean [bivalves] of non-land-patches with [habitat = \"canal\"])"
+
+PLOT
+775
+400
+1070
+580
+Plankton
+days
+Avg. nr plankton
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"mudflats" 1.0 0 -3889007 true "" "plot (mean [plankton] of non-land-patches with [habitat = \"mudflat\"])"
+"canals" 1.0 0 -11033397 true "" "plot (mean [plankton] of non-land-patches with [habitat = \"canal\"])"
+
+TEXTBOX
+875
+15
+965
+33
+PREY DENSITIES
+11
+0.0
+1
+
+TEXTBOX
+1485
+615
+1525
+633
+g / day
+11
+0.0
+1
 
 SLIDER
-1160
-750
-1332
-783
-bivalves-diffuse-rate
-bivalves-diffuse-rate
+1190
+900
+1380
+933
+plankton-eating-period
+plankton-eating-period
 0
+365
+180
+5
 1
-0.1
-0.01
-1
-NIL
+days
 HORIZONTAL
+
+MONITOR
+170
+60
+240
+105
+Year
+floor (ticks / 365)
+17
+1
+11
+
+BUTTON
+15
+60
+165
+105
+Set defaults
+set map-file \"map.asc\"\nset initial-number-of-fishes 150\n\nset age-at-maturity-red 2\nset max-age-red 4\nset max-feeding-rate-red 35\nset reproduction-threshold-red 800\nset egg-mortality-red 80\n\nset age-at-maturity-green 2\nset max-age-green 4\nset max-feeding-rate-green 35\nset reproduction-threshold-green 800\nset egg-mortality-green 80\n\nset max-energy-reserve 1000\nset max-maintenance-cost 50\nset small-movement-cost 25\nset large-movement-cost 100\nset cost-per-gamete 0.4\nset days-until-hatch 10\nset plankton-eating-period 180\n\nset energy-gain-from-worms 7\nset worms-regrowth-rate 200\nset weight-per-worm 0.4\nset max-worms-mudflat 100\nset max-worms-canal 50\n\n\nset energy-gain-from-bivalves 10\nset bivalves-regrowth-rate 200\nset weight-per-bivalve 0.5\nset max-bivalves-mudflat 50\nset max-bivalves-canal 200\n\nset energy-gain-from-plankton 6\nset plankton-regrowth-rate 5500\nset weight-per-plankton 0.01\nset max-plankton-mudflat 6600\nset max-plankton-canal 6600
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
-## WHAT IS IT?
+## PURPOSE
 
-(a general understanding of what the model is trying to show or explain)
+This model attempts to simulate spatial interaction of 2 flatfish and 3 prey types in an estuary, featuring two different habitats, simple prey population dynamics, reproduction and competition. The model has simplified bioenergetics governing the state of each agent.
 
-## HOW IT WORKS
+Lots of monitors help parameterise, but there are a lot of parameters! Try to see how many days your species can survive!
 
-(what rules the agents use to create the overall behavior of the model)
+## BACKGROUND
 
-## HOW TO USE IT
+The common sole (Solea solea) and the Senegalese sole (Solea senegalensis) have come to share the same habitats, as climate change allows the latter species to move further North and overlap the habitat of the common sole. These very similar species now have to survive the fearce competition for similar resources. On the first year, they mostly eat zooplankton in the water column, but then they feed on both worms (polychaetes such as Hediste diversicolor) and bivalves (such as Srobicularia plana).
 
-(how to use the model, including a description of each of the items in the Interface tab)
 
-## THINGS TO NOTICE
+## AGENT TYPES
 
-(suggested things for the user to notice while running the model)
+The only moving agents are 2 fish species acting as competing predators. Three prey types are mostly fixed to a patch, varying only in their population densities. These are worms, bivalves and zooplankton.
 
-## THINGS TO TRY
+## AGENT ATTRIBUTES
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+Both fish species have similar properties, which can be set equally or differently:
 
-## EXTENDING THE MODEL
+-	age-at-maturity: age at which a fish becomes an adult and is fit for reproduction
+-	max age: maximum age
+-	maximum feeding rate: maximum total size of prey a fish can eat in a day
+-	energy reserve size: the size of the energy reserve, measured in arbitrary energy units, which limits feeding rates
+-	maintenance cost: energy required to support life
+-	small-movement cost: energy cost of staying in the same patch
+-	large-movement cost: energy cost of moving to another patch
+-	reproduction threshold: surplus energy level at which an adult fish becomes fit to produce gametes and starts to seek females
+-	cost-per-gamete: energy cost of producing one gamete. This is used to calculate the number of eggs to generate.
+-	Days until hatch: days from egg fecundation to hatch.
+-	Egg mortality: fraction of eggs that die during the days it takes to hatch
+-       Plankton eating period: amount of days post-settlement during which the fish only eats plankton.
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+Fish state variables include:
 
-## NETLOGO FEATURES
+-	coordinates of their current patch
+-	sex
+-	an energy reserve compartment that stores energy assimilated from consumed prey, minus the maintenance costs
+-	age (days)
+-	life stage: juvenile or adult
 
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+All three prey types have similar fixed properties, but they can be different between types:
 
-## RELATED MODELS
+-	weight per prey: this impacts feeding rate, because larger prey occupy more volume in a stomach.
+-	energy gain from prey: this is the amount of energy contained in 1 gram of prey, minus the energy required to eat it (chase, chew, filter…).
+-       Growth rate, as in a fixed number of new individuals per day.
+-	Carrying capacity in mudflats: maximum number of prey in mudflats
+-	Carrying capacity in canals: maximum number of prey of this type in canals
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
 
-## CREDITS AND REFERENCES
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+## ENVIRONMENT
+
+The environment is a spatially explicit depiction of a generic estuary with patches representing 2 habitats, mudflats and sandy canals. A third patch color is used to represent land, where nothing happens.
+
+A patch represents 4 square meters. Each habitat can better support different types of prey. By default, worms prefer mudflats, bivalves prefer the canals and free-swimming plankton have no preference. Depth and water currents are ignored.
+
+## AGENT BEHAVIOUR
+
+Fish move by examining surrounding patches and deciding to stay or move to another patch based on the competition existing on the current patch, potential energy gains, current energy levels and whether or not they are ready to reproduce. Although there is a grid movement, fish are "jittered" for better visualisation (to avoid all fish in a patch being overlapped).
+
+While on a patch, fish eat prey based on the energy requirements and feeding rate. Because fish can only pick one prey type per day, prey choice involves a decision process based on the potential energy gains.
+
+Adults with enough energy reproduce if an adult of the opposite sex with enough energy to do so is present. Surviving fish eggs will remain in the patch of origin for the required time. Once they hatch, juveniles are randomly distributed across mudflat patches (less water flow, more protection) across the map. If they can eat given the current competition in the patch, they will be added as fish agents, if not the settlement is not successful and larvae die.
+Prey grow with a pre-defined fixed rate, limited by carrying capacities.
+
+
+## MODEL SCHEDULE
+
+At the beggining, the map is loaded and fish are placed randomly on non-land patches, species and sexes are chosen randomly and ages are distributed normally around the middle of life expectancy.
+
+Each model cycle represents one day, and events occur in this order:
+
+- fish die if too old
+- fish increase age, juveniles change to adults if they reach maturity, max energy, feeding rate and maintenance costs are proportional to age, until they reach the maximum at maturity.
+- fish pay maintenance-costs or die!
+- fish move or stay by scanning the environment
+- fish eat-prey, larger fish get to eat first
+- eggs age advances
+- eggs that reach full development hatch
+- fish reproduce
+- prey grows back
+
+
+
+## INPUTS AND OUTPUTS
+
+Inputs
+
+The initial number of fish from each breed, the percentage cover of each habitat type and all the parameters described for fish and prey.
+
+Outputs
+
+The population of each fish species, the number of days/years until population collapses, the spatial distribution of species and sizes.
+
+Ultimately, it serves to attempt if two competing predators can find a way to survive and avoid the heavy costs of competition, even if the preferences for a certain habitat or prey are not specifically stated.
+
+## WHAT TO DO
+
+The mode has a lot of parameters, but it is still a very simplistic representation, so it can be hard to parameterise! Experimenting with species attributes and prey availabilities can lead to catastrophic outcomes very easily. Try to see how many days the populations can last. Try to give advantages to a species, such as faster maturity or more fecundity.
+
+There is a map editor so you can draw your own estuary using the mouse! And then save the map as an .asc file to use later! See how the fish do in your estuary.
+
+## REFERENCES
+
+Cabral, H. N., Costa, M. J. (1999) Differential use of nursery areas within the Tagus estuary by sympatric soles, Solea solea and Solea senegalensis. Environmental Biology of Fishes 56, 389–397.
+
+Froese, R., Pauly, D. (Eds.) (2016) FishBase. World Wide Web electronic publication. www.fishbase.org, ( 06/2016 ).
+
+Lagardère, J.P. (1987) Feeding ecology and daily food consumption of common sole, Solea vulgaris Quensel, juveniles on the French Atlantic coast. Journal of Fish Biology 30, 91-104.
+
+Vinagre, C., Cabral, H. N. (2008) Prey consumption by the juvenile soles, Solea solea and Solea senegalensis, in the Tagus estuary, Portugal. Estuarine, Coastal and Shelf Science 78, 45–50.
 @#$#@#$#@
 default
 true
