@@ -1,8 +1,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;
-;;                  ;;     Created as a final project for the intro to ABM MOOC 2016
+;;                  ;;     Created by Miguel Pessanha Pais as a final project for the intro to ABM MOOC 2016
 ;;ESTUARYSCAPE MODEL;;                     by Bill Rand @ Complexity Explorer
 ;;                  ;;
-;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;                         Contact: mppais@fc.ul.pt
 
 extensions [gis]
 
@@ -324,7 +324,7 @@ end
 ; The extremely complex thought process of fish as they pick which prey to eat based on their needs.
 
 to eat       ; fish procedure
-  ifelse age <= plankton-eating-period [                                                                   ; if you are a young planktion eater
+  ifelse age <= plankton-eating-period [                                                                   ; if you are a young plankton eater
     if plankton = 0 [stop]                                                              ; if there's no plankton here, I'm not eating today
     let required-amount ceiling ((reserve-size - energy) / (energy-gain-from-plankton)) ; required amount (in grams)
     if required-amount > feeding-rate [set required-amount feeding-rate]                ; required amount is limited by feeding rate
@@ -610,6 +610,7 @@ to draw-canals
     [
       ask patch mouse-xcor mouse-ycor
         [ set pcolor 96
+          set habitat "canal"
           display ]
     ]
 end
@@ -620,6 +621,7 @@ to draw-mudflats
     [
       ask patch mouse-xcor mouse-ycor
         [ set pcolor 37
+          set habitat "mudflat"
           display ]
     ]
 end
@@ -629,6 +631,7 @@ to erase-map
     [
       ask patch mouse-xcor mouse-ycor
         [ set pcolor black
+          set habitat ""
           display ]
     ]
 end
@@ -636,6 +639,7 @@ end
 to fill-land
   ask patches with [pcolor = black] [
    set pcolor green
+   set habitat "land"
   ]
 end
 
@@ -734,9 +738,9 @@ SLIDER
 worms-regrowth-rate
 worms-regrowth-rate
 0
-1000
-200
-10
+500
+5
+5
 1
 / day
 HORIZONTAL
@@ -779,9 +783,9 @@ SLIDER
 bivalves-regrowth-rate
 bivalves-regrowth-rate
 0
-1000
-200
-10
+500
+5
+5
 1
 / day
 HORIZONTAL
@@ -795,7 +799,7 @@ plankton-regrowth-rate
 plankton-regrowth-rate
 0
 20000
-5500
+200
 100
 1
 / day
@@ -1110,7 +1114,7 @@ max-worms-mudflat
 max-worms-mudflat
 0
 500
-100
+80
 10
 1
 NIL
@@ -1125,7 +1129,7 @@ max-bivalves-mudflat
 max-bivalves-mudflat
 0
 500
-50
+30
 10
 1
 NIL
@@ -1140,7 +1144,7 @@ max-plankton-mudflat
 max-plankton-mudflat
 0
 10000
-6600
+4100
 100
 1
 NIL
@@ -1155,7 +1159,7 @@ max-worms-canal
 max-worms-canal
 0
 500
-50
+30
 10
 1
 NIL
@@ -1170,7 +1174,7 @@ max-bivalves-canal
 max-bivalves-canal
 0
 500
-200
+80
 10
 1
 NIL
@@ -1185,7 +1189,7 @@ max-plankton-canal
 max-plankton-canal
 0
 10000
-6600
+4100
 100
 1
 NIL
@@ -2013,7 +2017,7 @@ BUTTON
 165
 105
 Set defaults
-set map-file \"map.asc\"\nset initial-number-of-fishes 150\n\nset age-at-maturity-red 2\nset max-age-red 4\nset max-feeding-rate-red 35\nset reproduction-threshold-red 800\nset egg-mortality-red 80\n\nset age-at-maturity-green 2\nset max-age-green 4\nset max-feeding-rate-green 35\nset reproduction-threshold-green 800\nset egg-mortality-green 80\n\nset max-energy-reserve 1000\nset max-maintenance-cost 50\nset small-movement-cost 25\nset large-movement-cost 100\nset cost-per-gamete 0.4\nset days-until-hatch 10\nset plankton-eating-period 180\n\nset energy-gain-from-worms 7\nset worms-regrowth-rate 200\nset weight-per-worm 0.4\nset max-worms-mudflat 100\nset max-worms-canal 50\n\n\nset energy-gain-from-bivalves 10\nset bivalves-regrowth-rate 200\nset weight-per-bivalve 0.5\nset max-bivalves-mudflat 50\nset max-bivalves-canal 200\n\nset energy-gain-from-plankton 6\nset plankton-regrowth-rate 5500\nset weight-per-plankton 0.01\nset max-plankton-mudflat 6600\nset max-plankton-canal 6600
+set map-file \"map.asc\"\nset initial-number-of-fishes 150\n\nset age-at-maturity-red 2\nset max-age-red 4\nset max-feeding-rate-red 35\nset reproduction-threshold-red 800\nset egg-mortality-red 80\n\nset age-at-maturity-green 2\nset max-age-green 4\nset max-feeding-rate-green 35\nset reproduction-threshold-green 800\nset egg-mortality-green 80\n\nset max-energy-reserve 1000\nset max-maintenance-cost 50\nset small-movement-cost 25\nset large-movement-cost 100\nset cost-per-gamete 0.4\nset days-until-hatch 10\nset plankton-eating-period 180\n\nset energy-gain-from-worms 7\nset worms-regrowth-rate 5\nset weight-per-worm 0.4\nset max-worms-mudflat 100\nset max-worms-canal 50\n\n\nset energy-gain-from-bivalves 10\nset bivalves-regrowth-rate 5\nset weight-per-bivalve 0.5\nset max-bivalves-mudflat 50\nset max-bivalves-canal 200\n\nset energy-gain-from-plankton 6\nset plankton-regrowth-rate 600\nset weight-per-plankton 0.01\nset max-plankton-mudflat 6600\nset max-plankton-canal 6600
 NIL
 1
 T
@@ -2031,9 +2035,11 @@ This model attempts to simulate spatial interaction of 2 flatfish and 3 prey typ
 
 Lots of monitors help parameterise, but there are a lot of parameters! Try to see how many days your species can survive!
 
+I am aware the model still has bugs here and there, this was done in 3 days, so not much time to debug... but I will be improving the code in my spare time.
+
 ## BACKGROUND
 
-The common sole (Solea solea) and the Senegalese sole (Solea senegalensis) have come to share the same habitats, as climate change allows the latter species to move further North and overlap the habitat of the common sole. These very similar species now have to survive the fearce competition for similar resources. On the first year, they mostly eat zooplankton in the water column, but then they feed on both worms (polychaetes such as Hediste diversicolor) and bivalves (such as Srobicularia plana).
+The common sole (Solea solea) and the Senegalese sole (Solea senegalensis) have come to share the same habitats, as climate change allows the latter species to move further North and overlap the habitat of the common sole. These very similar species now have to survive the fierce competition for similar resources. On the first year, they mostly eat zooplankton in the water column, but then they feed on both worms (polychaetes such as Hediste diversicolor) and bivalves (such as Scrobicularia plana).
 
 
 ## AGENT TYPES
@@ -2136,6 +2142,14 @@ Froese, R., Pauly, D. (Eds.) (2016) FishBase. World Wide Web electronic publicat
 Lagardère, J.P. (1987) Feeding ecology and daily food consumption of common sole, Solea vulgaris Quensel, juveniles on the French Atlantic coast. Journal of Fish Biology 30, 91-104.
 
 Vinagre, C., Cabral, H. N. (2008) Prey consumption by the juvenile soles, Solea solea and Solea senegalensis, in the Tagus estuary, Portugal. Estuarine, Coastal and Shelf Science 78, 45–50.
+
+## COPYRIGHT AND LICENSE
+
+Copyright 2016 Miguel P. Pais
+
+![CC BY-NC-SA 3.0](http://ccl.northwestern.edu/images/creativecommons/byncsa.png)
+
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
 @#$#@#$#@
 default
 true
