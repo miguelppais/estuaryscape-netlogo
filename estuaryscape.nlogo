@@ -392,8 +392,8 @@ to fish-eat-prey  ; observer procedure
 end
 
 to sort-out-competition ; patch procedure
-  foreach sort-on [0 - size] fishes-here [          ; fishes eat in descending order of size (proxy of age)
-   ask ? [eat]
+  foreach sort-on [0 - size] fishes-here [ ?1 ->          ; fishes eat in descending order of size (proxy of age)
+   ask ?1 [eat]
   ]
 end
 
@@ -657,8 +657,8 @@ end
 GRAPHICS-WINDOW
 255
 10
-765
-541
+763
+519
 -1
 -1
 10.0
@@ -724,7 +724,7 @@ initial-number-of-fishes
 initial-number-of-fishes
 10
 500
-150
+150.0
 5
 1
 NIL
@@ -739,7 +739,7 @@ worms-regrowth-rate
 worms-regrowth-rate
 0
 500
-5
+5.0
 5
 1
 / day
@@ -754,7 +754,7 @@ energy-gain-from-worms
 energy-gain-from-worms
 0
 100
-7
+7.0
 1
 1
 per g
@@ -769,7 +769,7 @@ large-movement-cost
 large-movement-cost
 0
 100
-100
+100.0
 1
 1
 NIL
@@ -784,7 +784,7 @@ bivalves-regrowth-rate
 bivalves-regrowth-rate
 0
 500
-5
+5.0
 5
 1
 / day
@@ -799,7 +799,7 @@ plankton-regrowth-rate
 plankton-regrowth-rate
 0
 20000
-200
+200.0
 100
 1
 / day
@@ -814,7 +814,7 @@ energy-gain-from-bivalves
 energy-gain-from-bivalves
 0
 100
-10
+10.0
 1
 1
 per g
@@ -829,7 +829,7 @@ energy-gain-from-plankton
 energy-gain-from-plankton
 0
 100
-6
+6.0
 1
 1
 per g
@@ -844,7 +844,7 @@ age-at-maturity-red
 age-at-maturity-red
 1
 10
-2
+2.0
 1
 1
 years
@@ -859,7 +859,7 @@ age-at-maturity-green
 age-at-maturity-green
 1
 10
-2
+2.0
 1
 1
 years
@@ -874,7 +874,7 @@ max-age-red
 max-age-red
 1
 10
-4
+4.0
 1
 1
 years
@@ -889,7 +889,7 @@ max-age-green
 max-age-green
 1
 10
-4
+4.0
 1
 1
 years
@@ -904,7 +904,7 @@ max-feeding-rate-red
 max-feeding-rate-red
 1
 50
-35
+35.0
 1
 1
 g/day
@@ -919,7 +919,7 @@ max-feeding-rate-green
 max-feeding-rate-green
 1
 50
-35
+35.0
 1
 1
 g/day
@@ -934,7 +934,7 @@ max-maintenance-cost
 max-maintenance-cost
 0
 100
-50
+50.0
 1
 1
 NIL
@@ -949,7 +949,7 @@ small-movement-cost
 small-movement-cost
 0
 100
-25
+25.0
 1
 1
 NIL
@@ -964,7 +964,7 @@ reproduction-threshold-red
 reproduction-threshold-red
 0
 1000
-800
+800.0
 10
 1
 NIL
@@ -979,7 +979,7 @@ reproduction-threshold-green
 reproduction-threshold-green
 0
 1000
-800
+800.0
 10
 1
 NIL
@@ -1009,7 +1009,7 @@ days-until-hatch
 days-until-hatch
 1
 30
-10
+10.0
 1
 1
 NIL
@@ -1024,7 +1024,7 @@ egg-mortality-red
 egg-mortality-red
 0
 100
-80
+80.0
 5
 1
 %
@@ -1039,7 +1039,7 @@ egg-mortality-green
 egg-mortality-green
 0
 100
-80
+80.0
 5
 1
 %
@@ -1054,7 +1054,7 @@ max-energy-reserve
 max-energy-reserve
 10
 1000
-1000
+1000.0
 10
 1
 NIL
@@ -1114,7 +1114,7 @@ max-worms-mudflat
 max-worms-mudflat
 0
 500
-80
+80.0
 10
 1
 NIL
@@ -1129,7 +1129,7 @@ max-bivalves-mudflat
 max-bivalves-mudflat
 0
 500
-30
+30.0
 10
 1
 NIL
@@ -1144,7 +1144,7 @@ max-plankton-mudflat
 max-plankton-mudflat
 0
 10000
-4100
+4100.0
 100
 1
 NIL
@@ -1159,7 +1159,7 @@ max-worms-canal
 max-worms-canal
 0
 500
-30
+30.0
 10
 1
 NIL
@@ -1174,7 +1174,7 @@ max-bivalves-canal
 max-bivalves-canal
 0
 500
-80
+80.0
 10
 1
 NIL
@@ -1189,7 +1189,7 @@ max-plankton-canal
 max-plankton-canal
 0
 10000
-4100
+4100.0
 100
 1
 NIL
@@ -1994,7 +1994,7 @@ plankton-eating-period
 plankton-eating-period
 0
 365
-180
+180.0
 5
 1
 days
@@ -2145,7 +2145,7 @@ Vinagre, C., Cabral, H. N. (2008) Prey consumption by the juvenile soles, Solea 
 
 ## COPYRIGHT AND LICENSE
 
-Copyright 2016 Miguel P. Pais
+Copyright 2017 Miguel P. Pais
 
 ![CC BY-NC-SA 3.0](http://ccl.northwestern.edu/images/creativecommons/byncsa.png)
 
@@ -2455,9 +2455,8 @@ false
 0
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
-
 @#$#@#$#@
-NetLogo 5.3.1
+NetLogo 6.0.2
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
@@ -2473,7 +2472,6 @@ true
 0
 Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
-
 @#$#@#$#@
 1
 @#$#@#$#@
